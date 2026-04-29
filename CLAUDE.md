@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **iGaming Crash System** is a microservices-based betting platform with an explicit state machine for crash game rounds. The codebase uses **Domain-Driven Design (DDD)** and **Hexagonal Architecture** with **Bun** as the runtime and **NestJS** as the application framework.
 
-**Status**: Domain layer ✅ complete (1,247 lines). Wallets application layer ✅ complete (376 lines). Games application layer ✅ complete (824 lines). Infrastructure and Presentation layers require implementation.
+**Status**: Domain layer ✅ complete (1,247 lines). Wallets application layer ✅ complete (376 lines). Games application layer ✅ complete (824 lines). Infrastructure layer ✅ complete (841 lines). Presentation layer requires implementation.
 
 ## Core Architecture
 
@@ -41,13 +41,13 @@ services/
 │   └── src/
 │       ├── domain/           ✅ Complete: Round, Bet, CrashPoint entities
 │       ├── application/      ✅ Complete: RoundLifecycleService + 4 use cases (824 lines)
-│       ├── infrastructure/   ❌ Empty: Repository implementations needed
+│       ├── infrastructure/   ✅ Complete: TypeORM entities, repositories, migrations (841 lines total)
 │       └── presentation/     ⚠️  Minimal: Health check only
 ├── wallets/
 │   └── src/
 │       ├── domain/           ✅ Complete: Wallet, Money value objects
 │       ├── application/      ✅ Complete: 4 use cases, 2 DTOs (376 lines)
-│       ├── infrastructure/   ❌ Empty: Repository implementations needed
+│       ├── infrastructure/   ✅ Complete: TypeORM entities, repositories, migrations
 │       └── presentation/     ⚠️  Minimal: Health check only
 ```
 
@@ -498,15 +498,58 @@ Infrastructure layer:
 - Bet ID generation: `bet-{timestamp}-{random}` (9-char alphanumeric)
 - Amount precision: Convert mainUnit to centavos via `BigInt(Math.round(amount * 100))`
 
-### Infrastructure Layer (❌ Empty)
-- **Location**: `services/*/src/infrastructure/`
+### Infrastructure Layer (✅ Complete - 841 lines)
+- **Location**: `services/*/src/infrastructure/typeorm/`
 - **Responsibility**: Adapters, external integrations, persistence
-- **To Implement**:
-  - TypeORM repository implementations
-  - RabbitMQ publisher/subscriber
-  - Database migrations
-  - Cache layer (Redis)
-  - External service clients
+- **Key Components**:
+  - TypeORM entities for Round, Bet, Wallet with BigInt precision
+  - BigInt transformer for PostgreSQL bigint ↔ bigint conversion
+  - Repository implementations (RoundRepository, WalletRepository)
+  - Domain ↔ TypeORM entity mapping
+  - Database migrations (create_rounds_and_bets, create_wallets)
+
+#### BigInt Transformer
+```typescript
+const BigIntTransformer = {
+  to: (value: bigint | null | undefined): string | null => {
+    if (value === null || value === undefined) return null;
+    return value.toString();
+  },
+  from: (value: string | null | undefined): bigint | null => {
+    if (value === null || value === undefined) return null;
+    return BigInt(value);
+  },
+};
+
+@Column({ type: 'bigint', transformer: BigIntTransformer })
+balanceInCentavos: bigint
+```
+
+**Critical**: PostgreSQL returns bigint as string by default. The transformer ensures native bigint for financial calculations.
+
+#### TypeORM Entities
+
+| Entity | File | Purpose |
+|--------|------|---------|
+| RoundTypeormEntity | `games/src/infrastructure/typeorm/round.typeorm-entity.ts` | Stores round state, multiplier, CrashPoint (multiplier/hash/seed) |
+| BetTypeormEntity | `games/src/infrastructure/typeorm/bet.typeorm-entity.ts` | Stores bet with BigInt precision, inherits CrashPoint from Round |
+| WalletTypeormEntity | `wallets/src/infrastructure/typeorm/wallet.typeorm-entity.ts` | Stores wallet with BigInt balance, unique userId index |
+
+#### Repository Implementations
+
+| Repository | File | Methods |
+|-----------|------|---------|
+| RoundRepository | `games/src/infrastructure/typeorm/round.repository.ts` | findById, findMostRecent, findAll, save, delete, exists, count |
+| WalletRepository | `wallets/src/infrastructure/typeorm/wallet.repository.ts` | findById, findByUserId, save, delete, exists |
+
+**Mapping Pattern**: Repositories handle domain ↔ TypeORM entity conversion with factory methods. CrashPoint reconstructed from components on read.
+
+#### Database Migrations
+
+| Migration | File | Tables |
+|-----------|------|--------|
+| CreateRoundsAndBets | `games/src/infrastructure/typeorm/migrations/1704067200000-create-rounds-and-bets.ts` | rounds, bets |
+| CreateWallets | `wallets/src/infrastructure/typeorm/migrations/1704067200001-create-wallets.ts` | wallets |
 
 ### Presentation Layer (⚠️ Minimal)
 - **Location**: `services/*/src/presentation/`
@@ -616,15 +659,7 @@ If a Round is stuck or has unexpected behavior:
 
 ## Next Steps for Implementer
 
-1. **Implement Infrastructure Layer** (600+ lines estimated)
-   - Create TypeORM entities for Round, Bet, Wallet, mapping domain models to database
-   - Implement repository interfaces (IRoundRepository, IWalletRepository)
-   - Set up database migrations (Typeorm migrations or raw SQL)
-   - Connect RabbitMQ publisher/subscriber for event-driven communication
-   - Database connection pooling and query optimization
-   - Cache layer (Redis) for current round fast reads
-
-2. **Implement Presentation Layer** (400+ lines estimated)
+1. **Implement Presentation Layer** (400+ lines estimated)
    - Add NestJS controllers for CRUD endpoints (games, wallets)
    - Implement WebSocket gateway for real-time multiplier broadcasts
    - Add error handling pipes and validation decorators
@@ -632,14 +667,26 @@ If a Round is stuck or has unexpected behavior:
    - Swagger documentation for all endpoints
    - Request/response interceptors for logging
 
-3. **Test & Document**
+2. **NestJS Module Wiring**
+   - Create TypeORM database connections with entity registration
+   - Register repositories as providers in module providers
+   - Wire use cases to repositories via constructor injection
+   - Configure migrations and database initialization
+
+3. **RabbitMQ Integration**
+   - Create publisher for game events (BetPlaced, BetCashedOut, RoundCrashed)
+   - Create subscriber in wallets service for wallet updates
+   - Message serialization/deserialization
+   - Retry logic and dead letter queue
+
+4. **Test & Document**
    - Write unit tests for domain + application layers (>90% coverage)
    - Write E2E tests for HTTP endpoints and WebSocket events
    - Integration tests with RabbitMQ message flows
    - Load testing for multiplier loop (100ms intervals)
-   - Update this CLAUDE.md with infrastructure details
+   - Update this CLAUDE.md with implementation details
 
-4. **Production Readiness**
+5. **Production Readiness**
    - Implement Provably Fair cryptography (replace mock hashes)
    - Add request rate limiting
    - Implement audit logging
@@ -651,6 +698,6 @@ If a Round is stuck or has unexpected behavior:
 **Last Updated**: 2026-04-29  
 **Domain Layer Status**: ✅ Complete (1,247 lines, 7 files)  
 **Application Layer Status**: ✅ Wallets Complete (376 lines, 9 files) | ✅ Games Complete (824 lines, 13 files)  
-**Infrastructure Layer Status**: ❌ To Implement  
+**Infrastructure Layer Status**: ✅ Complete (841 lines, 9 files)  
 **Presentation Layer Status**: ⚠️ Minimal (health check only)  
 **Repository**: https://github.com/yourusername/igaming-crash-system
