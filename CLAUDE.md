@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **iGaming Crash System** is a microservices-based betting platform with an explicit state machine for crash game rounds. The codebase uses **Domain-Driven Design (DDD)** and **Hexagonal Architecture** with **Bun** as the runtime and **NestJS** as the application framework.
 
-**Status**: Domain layer ✅ complete (1,247 lines). Wallets application layer ✅ complete (376 lines). Games application layer, Infrastructure, and full Presentation layers require implementation.
+**Status**: Domain layer ✅ complete (1,247 lines). Wallets application layer ✅ complete (376 lines). Games application layer ✅ complete (824 lines). Infrastructure and Presentation layers require implementation.
 
 ## Core Architecture
 
@@ -40,7 +40,7 @@ services/
 ├── games/
 │   └── src/
 │       ├── domain/           ✅ Complete: Round, Bet, CrashPoint entities
-│       ├── application/      ❌ Empty: 8+ use cases needed
+│       ├── application/      ✅ Complete: RoundLifecycleService + 4 use cases (824 lines)
 │       ├── infrastructure/   ❌ Empty: Repository implementations needed
 │       └── presentation/     ⚠️  Minimal: Health check only
 ├── wallets/
@@ -379,7 +379,7 @@ Infrastructure layer:
 - **Key Files**: Round, Bet, CrashPoint, Wallet, Money, Repository interfaces
 - **Status**: Ready for use
 
-### Application Layer (✅ Wallets Complete, ❌ Games Empty)
+### Application Layer (✅ Complete)
 - **Location**: `services/*/src/application/`
 - **Responsibility**: Use cases, orchestration, transaction management
 
@@ -422,17 +422,81 @@ Infrastructure layer:
 - Factory methods for entity-to-DTO conversion
 - No orchestrator service; use cases called directly by controllers/consumers
 
-#### Games Service Application Layer (❌ Empty - To Implement)
+#### Games Service Application Layer (✅ Complete - 824 lines)
 
-Will require 8+ use cases handling state machine logic:
-- `CreateRoundUseCase`: Initialize round in BETTING state
-- `PlaceBetUseCase`: Add bet to round (BETTING state only)
-- `StartRoundUseCase`: BETTING → RUNNING transition
-- `UpdateMultiplierUseCase`: Increment multiplier, auto-crash on threshold
-- `CashOutUseCase`: Lock bet as CASHED_OUT (RUNNING state only)
-- `CrashRoundUseCase`: RUNNING → CRASHED transition, liquidate bets
-- `GetRoundUseCase`: Retrieve round data
-- `GetRoundStatisticsUseCase`: Calculate statistics (totalWagered, totalWinnings, houseResult)
+**Critical Service** (`services/games/src/application/services/`):
+
+**RoundLifecycleService** (380 lines) - Orchestrates entire game loop:
+- **BETTING Phase** (10s timer):
+  - Accepts player bets via `placeBet(bet)`
+  - Auto-transitions to RUNNING after timer expires
+  - Timer: `bettingTimerId` managed by NestJS lifecycle
+  
+- **RUNNING Phase** (multiplier loop every 100ms):
+  - Multiplier increments by 0.001 per interval
+  - Players can cash out via `cashOutBet(betId, multiplier)`
+  - Auto-crash triggered when multiplier ≥ crashPoint
+  - Emit WebSocket event `round:multiplier-updated` (TODO: integrate emitter)
+  
+- **CRASHED Phase** (auto-liquidation):
+  - All PENDING bets marked LOST
+  - Compute final statistics (totalWagered, totalWinnings, houseResult)
+  - Emit `round:settled` event for RabbitMQ
+  - Schedule next round (5s delay)
+
+- **Methods**:
+  - `initializeNewRound()`: Create new Round in BETTING state
+  - `placeBet(bet)`: Delegate to round.placeBet() + persist
+  - `cashOutBet(betId, multiplier)`: Delegate to round.cashOut() + persist
+  - `getCurrentRound()`: Fast in-memory read
+  - `getRoundHistory(page, limit)`: Query repository
+
+- **Error Handling**: Try/catch on each phase transition, descriptive logging
+
+**Use Cases** (`services/games/src/application/use-cases/`):
+
+1. **PlaceBetUseCase** (65 lines)
+   - Input: `PlaceBetDto` with userId, amountInMainUnit
+   - Output: `BetResponseDto`
+   - HTTP: `POST /games/bets`
+   - Validates input → Create Bet entity → Delegate to RoundLifecycleService.placeBet()
+   - Only works in BETTING state (enforced by service)
+
+2. **CashOutUseCase** (75 lines)
+   - Input: `CashOutDto` with betId, multiplier
+   - Output: `BetResponseDto`
+   - HTTP: `POST /games/bets/:betId/cash-out`
+   - Validates round in RUNNING → Delegate to RoundLifecycleService.cashOutBet()
+   - Emits RabbitMQ `BetCashedOut` event (TODO: integrate)
+
+3. **GetCurrentRoundUseCase** (45 lines)
+   - Input: None
+   - Output: `RoundResponseDto`
+   - HTTP: `GET /games/current`
+   - Fast in-memory read (no DB query)
+   - Returns all bets + multiplier + crash point
+
+4. **GetRoundHistoryUseCase** (55 lines)
+   - Input: `{ page, limit }`
+   - Output: `RoundResponseDto[]`
+   - HTTP: `GET /games/history?page=1&limit=10`
+   - Query repository with pagination (max limit: 100)
+   - Returns only CRASHED (settled) rounds ordered by recent first
+
+**DTOs** (`services/games/src/application/dtos/`):
+- `PlaceBetDto`: userId, amountInMainUnit
+- `CashOutDto`: betId, multiplier
+- `BetResponseDto`: Full bet data with state, winnings, ROI; factory method `fromDomain(bet)`
+- `RoundResponseDto`: Full round + all bets; factory method `fromDomain(round)`
+
+**Patterns**:
+- Constructor injection of `RoundLifecycleService`
+- Comprehensive input validation (non-empty userId, amount > 0, multiplier >= 1.0, page >= 1, limit > 0)
+- Descriptive error messages with context
+- Factory methods for entity-to-DTO conversion
+- Logging on all use case executions (debug on entry, log/error on result)
+- Bet ID generation: `bet-{timestamp}-{random}` (9-char alphanumeric)
+- Amount precision: Convert mainUnit to centavos via `BigInt(Math.round(amount * 100))`
 
 ### Infrastructure Layer (❌ Empty)
 - **Location**: `services/*/src/infrastructure/`
@@ -552,35 +616,41 @@ If a Round is stuck or has unexpected behavior:
 
 ## Next Steps for Implementer
 
-1. **Implement Application Layer - Games Service** (600+ lines estimated)
-   - Create use case classes for all 8+ game operations
-   - Handle state machine transitions in each use case
-   - RabbitMQ event publishing (BetPlaced, BetCashedOut, RoundCrashed)
-   - DTOs for game operations
-
-2. **Implement Infrastructure Layer**
-   - Create TypeORM entities for Round, Bet, Wallet
+1. **Implement Infrastructure Layer** (600+ lines estimated)
+   - Create TypeORM entities for Round, Bet, Wallet, mapping domain models to database
    - Implement repository interfaces (IRoundRepository, IWalletRepository)
-   - Set up database migrations
-   - Connect RabbitMQ publisher/subscriber
-   - Database connection pooling and caching
+   - Set up database migrations (Typeorm migrations or raw SQL)
+   - Connect RabbitMQ publisher/subscriber for event-driven communication
+   - Database connection pooling and query optimization
+   - Cache layer (Redis) for current round fast reads
 
-3. **Implement Presentation Layer**
-   - Add NestJS controllers for CRUD endpoints
-   - Implement WebSocket gateway for multiplier updates
+2. **Implement Presentation Layer** (400+ lines estimated)
+   - Add NestJS controllers for CRUD endpoints (games, wallets)
+   - Implement WebSocket gateway for real-time multiplier broadcasts
    - Add error handling pipes and validation decorators
-   - Integrate Keycloak authentication
+   - Integrate Keycloak authentication (extract JWT claims)
    - Swagger documentation for all endpoints
+   - Request/response interceptors for logging
 
-4. **Test & Document**
-   - Write unit tests for domain + application layers
-   - Write E2E tests for HTTP endpoints
-   - Integration tests with RabbitMQ
-   - Update this CLAUDE.md with implementation details
+3. **Test & Document**
+   - Write unit tests for domain + application layers (>90% coverage)
+   - Write E2E tests for HTTP endpoints and WebSocket events
+   - Integration tests with RabbitMQ message flows
+   - Load testing for multiplier loop (100ms intervals)
+   - Update this CLAUDE.md with infrastructure details
+
+4. **Production Readiness**
+   - Implement Provably Fair cryptography (replace mock hashes)
+   - Add request rate limiting
+   - Implement audit logging
+   - Add monitoring/alerting (Prometheus, ELK)
+   - Performance tuning for high-concurrency rounds
 
 ---
 
 **Last Updated**: 2026-04-29  
 **Domain Layer Status**: ✅ Complete (1,247 lines, 7 files)  
-**Application Layer Status**: ✅ Wallets Complete (376 lines, 9 files) | ❌ Games TODO  
+**Application Layer Status**: ✅ Wallets Complete (376 lines, 9 files) | ✅ Games Complete (824 lines, 13 files)  
+**Infrastructure Layer Status**: ❌ To Implement  
+**Presentation Layer Status**: ⚠️ Minimal (health check only)  
 **Repository**: https://github.com/yourusername/igaming-crash-system
