@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **iGaming Crash System** is a microservices-based betting platform with an explicit state machine for crash game rounds. The codebase uses **Domain-Driven Design (DDD)** and **Hexagonal Architecture** with **Bun** as the runtime and **NestJS** as the application framework.
 
-**Status**: Domain layer complete (1,247 lines). Application, Infrastructure, and full Presentation layers require implementation.
+**Status**: Domain layer ✅ complete (1,247 lines). Wallets application layer ✅ complete (376 lines). Games application layer, Infrastructure, and full Presentation layers require implementation.
 
 ## Core Architecture
 
@@ -40,13 +40,13 @@ services/
 ├── games/
 │   └── src/
 │       ├── domain/           ✅ Complete: Round, Bet, CrashPoint entities
-│       ├── application/      ❌ Empty: Use cases needed
+│       ├── application/      ❌ Empty: 8+ use cases needed
 │       ├── infrastructure/   ❌ Empty: Repository implementations needed
 │       └── presentation/     ⚠️  Minimal: Health check only
 ├── wallets/
 │   └── src/
 │       ├── domain/           ✅ Complete: Wallet, Money value objects
-│       ├── application/      ❌ Empty: Use cases needed
+│       ├── application/      ✅ Complete: 4 use cases, 2 DTOs (376 lines)
 │       ├── infrastructure/   ❌ Empty: Repository implementations needed
 │       └── presentation/     ⚠️  Minimal: Health check only
 ```
@@ -379,14 +379,60 @@ Infrastructure layer:
 - **Key Files**: Round, Bet, CrashPoint, Wallet, Money, Repository interfaces
 - **Status**: Ready for use
 
-### Application Layer (❌ Empty)
+### Application Layer (✅ Wallets Complete, ❌ Games Empty)
 - **Location**: `services/*/src/application/`
 - **Responsibility**: Use cases, orchestration, transaction management
-- **To Implement**:
-  - Use case classes (CreateRound, PlaceBet, CrashRound, GetWallet, etc.)
-  - Application services (RoundApplicationService, WalletApplicationService)
-  - DTOs for input/output
-  - Event handlers (subscribe to RabbitMQ)
+
+#### Wallets Service Application Layer (✅ Complete - 376 lines)
+
+**Use Cases** (`services/wallets/src/application/use-cases/`):
+
+1. **CreateWalletUseCase** (67 lines)
+   - Input: `CreateWalletDto` with userId and optional initialBalanceInMainUnit
+   - Output: `WalletResponseDto`
+   - HTTP: `POST /wallets`
+   - Validates unique user ID, creates wallet with Money value object
+
+2. **GetWalletUseCase** (52 lines)
+   - Input: userId (string)
+   - Output: `WalletResponseDto`
+   - HTTP: `GET /wallets/:userId`
+   - Retrieves wallet by user ID, returns balance in mainUnit + centavos
+
+3. **DebitWalletUseCase** (82 lines)
+   - Input: userId, amountInMainUnit
+   - Output: `WalletResponseDto`
+   - RabbitMQ Event: `BetPlaced`
+   - Validates sufficient funds BEFORE withdrawal, throws descriptive error if insufficient
+
+4. **CreditWalletUseCase** (79 lines)
+   - Input: userId, amountInMainUnit
+   - Output: `WalletResponseDto`
+   - RabbitMQ Event: `BetCashedOut`
+   - Credits winnings to wallet, always succeeds for positive amounts
+
+**DTOs** (`services/wallets/src/application/dtos/`):
+- `CreateWalletDto`: userId, optional initialBalanceInMainUnit
+- `WalletResponseDto`: id, userId, balanceInMainUnit, balanceInCentavos, timestamps, plus `fromDomain()` factory method
+
+**Patterns**:
+- Constructor injection of `IWalletRepository` (still interface, no implementation)
+- Comprehensive input validation
+- Descriptive error messages with context
+- Factory methods for entity-to-DTO conversion
+- No orchestrator service; use cases called directly by controllers/consumers
+
+#### Games Service Application Layer (❌ Empty - To Implement)
+
+Will require 8+ use cases handling state machine logic:
+- `CreateRoundUseCase`: Initialize round in BETTING state
+- `PlaceBetUseCase`: Add bet to round (BETTING state only)
+- `StartRoundUseCase`: BETTING → RUNNING transition
+- `UpdateMultiplierUseCase`: Increment multiplier, auto-crash on threshold
+- `CashOutUseCase`: Lock bet as CASHED_OUT (RUNNING state only)
+- `CrashRoundUseCase`: RUNNING → CRASHED transition, liquidate bets
+- `GetRoundUseCase`: Retrieve round data
+- `GetRoundStatisticsUseCase`: Calculate statistics (totalWagered, totalWinnings, houseResult)
 
 ### Infrastructure Layer (❌ Empty)
 - **Location**: `services/*/src/infrastructure/`
@@ -506,31 +552,35 @@ If a Round is stuck or has unexpected behavior:
 
 ## Next Steps for Implementer
 
-1. **Implement Application Layer**
-   - Create use case classes in `services/*/src/application/use-cases/`
-   - Inject repositories (interfaces, not implementations yet)
-   - Handle RabbitMQ events (BetPlaced, RoundCrashed)
+1. **Implement Application Layer - Games Service** (600+ lines estimated)
+   - Create use case classes for all 8+ game operations
+   - Handle state machine transitions in each use case
+   - RabbitMQ event publishing (BetPlaced, BetCashedOut, RoundCrashed)
+   - DTOs for game operations
 
 2. **Implement Infrastructure Layer**
    - Create TypeORM entities for Round, Bet, Wallet
-   - Implement repository interfaces
+   - Implement repository interfaces (IRoundRepository, IWalletRepository)
    - Set up database migrations
    - Connect RabbitMQ publisher/subscriber
+   - Database connection pooling and caching
 
 3. **Implement Presentation Layer**
    - Add NestJS controllers for CRUD endpoints
    - Implement WebSocket gateway for multiplier updates
-   - Add error handling pipes
+   - Add error handling pipes and validation decorators
    - Integrate Keycloak authentication
+   - Swagger documentation for all endpoints
 
 4. **Test & Document**
    - Write unit tests for domain + application layers
    - Write E2E tests for HTTP endpoints
-   - Add Swagger documentation
+   - Integration tests with RabbitMQ
    - Update this CLAUDE.md with implementation details
 
 ---
 
 **Last Updated**: 2026-04-29  
 **Domain Layer Status**: ✅ Complete (1,247 lines, 7 files)  
+**Application Layer Status**: ✅ Wallets Complete (376 lines, 9 files) | ❌ Games TODO  
 **Repository**: https://github.com/yourusername/igaming-crash-system

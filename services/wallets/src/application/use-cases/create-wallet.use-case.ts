@@ -53,8 +53,11 @@ export class CreateWalletUseCase {
     const initialBalance = input.initialBalanceInMainUnit ?? 0;
     const initialMoney = Money.fromMainUnit(initialBalance);
 
+    // Generate unique wallet ID
+    const walletId = `wallet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
     // Create new wallet aggregate root
-    const wallet = Wallet.create(input.userId, initialMoney);
+    const wallet = Wallet.create(walletId, input.userId, initialMoney);
 
     // Persist to repository
     await this.walletRepository.save(wallet);
