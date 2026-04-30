@@ -1,18 +1,11 @@
 import { CrashPoint } from './crash-point.vo';
 
-/**
- * Bet Entity States
- */
 export enum BetState {
-  PENDING = 'PENDING',      // Bet placed, waiting for cash out or crash
-  CASHED_OUT = 'CASHED_OUT', // Player cashed out before crash
-  LOST = 'LOST',            // Game crashed before cash out
+  PENDING = 'PENDING',
+  CASHED_OUT = 'CASHED_OUT',
+  LOST = 'LOST',
 }
 
-/**
- * Bet Entity
- * Represents a player's bet in a crash game round
- */
 export class Bet {
   private _id: string;
   private _roundId: string;
@@ -49,15 +42,6 @@ export class Bet {
     this._updatedAt = updatedAt;
   }
 
-  /**
-   * Creates a new Bet
-   * @param id - The bet unique identifier
-   * @param roundId - The round this bet belongs to
-   * @param playerId - The player who placed the bet
-   * @param betAmountInCentavos - The bet amount in centavos
-   * @returns A new Bet instance
-   * @throws Error if bet amount is negative or zero
-   */
   static create(
     id: string,
     roundId: string,
@@ -71,108 +55,62 @@ export class Bet {
     return new Bet(id, roundId, playerId, betAmountInCentavos);
   }
 
-  /**
-   * Gets the bet ID
-   */
   get id(): string {
     return this._id;
   }
 
-  /**
-   * Gets the round ID
-   */
   get roundId(): string {
     return this._roundId;
   }
 
-  /**
-   * Gets the player ID
-   */
   get playerId(): string {
     return this._playerId;
   }
 
-  /**
-   * Gets the bet amount in centavos
-   */
   get betAmountInCentavos(): bigint {
     return this._betAmountInCentavos;
   }
 
-  /**
-   * Gets the current bet state
-   */
   get state(): BetState {
     return this._state;
   }
 
-  /**
-   * Gets the cash out multiplier (only if cashed out)
-   */
   get cashOutMultiplier(): number | null {
     return this._cashOutMultiplier;
   }
 
-  /**
-   * Gets the winnings in centavos (only if won)
-   */
   get winningsInCentavos(): bigint | null {
     return this._winningsInCentavos;
   }
 
-  /**
-   * Gets the crash point for this bet's round
-   */
   get crashPoint(): CrashPoint | null {
     return this._crashPoint;
   }
 
-  /**
-   * Gets the creation timestamp
-   */
   get createdAt(): Date {
     return this._createdAt;
   }
 
-  /**
-   * Gets the last update timestamp
-   */
   get updatedAt(): Date {
     return this._updatedAt;
   }
 
-  /**
-   * Checks if the bet is still pending
-   */
   isPending(): boolean {
     return this._state === BetState.PENDING;
   }
 
-  /**
-   * Checks if the bet has been cashed out
-   */
   isCashedOut(): boolean {
     return this._state === BetState.CASHED_OUT;
   }
 
-  /**
-   * Checks if the bet has lost
-   */
   isLost(): boolean {
     return this._state === BetState.LOST;
   }
 
-  /**
-   * Checks if the bet has a result (either cashed out or lost)
-   */
   hasResult(): boolean {
     return this._state !== BetState.PENDING;
   }
 
-  /**
-   * Sets the crash point for this bet's round
-   * @param crashPoint - The crash point that will crash this round
-   */
   setCrashPoint(crashPoint: CrashPoint): void {
     if (this._state !== BetState.PENDING) {
       throw new Error('Cannot set crash point for a bet that already has a result');
@@ -181,11 +119,6 @@ export class Bet {
     this._updatedAt = new Date();
   }
 
-  /**
-   * Cashes out the bet at a specific multiplier
-   * @param multiplier - The multiplier at which the player cashes out
-   * @throws Error if bet is not pending or multiplier is invalid
-   */
   cashOut(multiplier: number): void {
     if (!this.isPending()) {
       throw new Error('Can only cash out pending bets');
@@ -207,10 +140,6 @@ export class Bet {
     this._updatedAt = new Date();
   }
 
-  /**
-   * Marks the bet as lost
-   * @throws Error if bet is not pending
-   */
   lose(): void {
     if (!this.isPending()) {
       throw new Error('Can only lose pending bets');
@@ -221,10 +150,6 @@ export class Bet {
     this._updatedAt = new Date();
   }
 
-  /**
-   * Calculates the profit/loss in centavos
-   * Positive: profit, Negative: loss, Zero: break-even
-   */
   calculateProfitLoss(): bigint {
     if (this._state === BetState.PENDING) {
       return 0n;
@@ -241,9 +166,6 @@ export class Bet {
     return this._winningsInCentavos - this._betAmountInCentavos;
   }
 
-  /**
-   * Calculates the return on investment (ROI) as a percentage
-   */
   calculateROI(): number {
     if (this._state === BetState.PENDING) {
       return 0;

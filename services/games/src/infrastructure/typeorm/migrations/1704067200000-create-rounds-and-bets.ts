@@ -1,15 +1,7 @@
 import { MigrationInterface, QueryRunner, Table, TableForeignKey } from 'typeorm';
 
-/**
- * CreateRoundsAndBets Migration
- * 
- * Creates the schema for:
- * 1. rounds table: Stores crash game round state
- * 2. bets table: Stores player bets with BigInt precision for amounts
- */
 export class CreateRoundsAndBets1704067200000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Create rounds table
     await queryRunner.createTable(
       new Table({
         name: 'rounds',
@@ -93,7 +85,6 @@ export class CreateRoundsAndBets1704067200000 implements MigrationInterface {
       true,
     );
 
-    // Create bets table
     await queryRunner.createTable(
       new Table({
         name: 'bets',
@@ -173,7 +164,6 @@ export class CreateRoundsAndBets1704067200000 implements MigrationInterface {
       true,
     );
 
-    // Add foreign key constraint
     await queryRunner.createForeignKey(
       'bets',
       new TableForeignKey({
@@ -186,7 +176,6 @@ export class CreateRoundsAndBets1704067200000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // Drop foreign key
     const table = await queryRunner.getTable('bets');
     const foreignKey = table?.foreignKeys.find(
       (fk) => fk.columnNames.indexOf('roundId') !== -1,
@@ -195,7 +184,6 @@ export class CreateRoundsAndBets1704067200000 implements MigrationInterface {
       await queryRunner.dropForeignKey('bets', foreignKey);
     }
 
-    // Drop tables
     await queryRunner.dropTable('bets', true);
     await queryRunner.dropTable('rounds', true);
   }

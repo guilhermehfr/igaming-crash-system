@@ -1,11 +1,5 @@
 import { BetResponseDto } from './bet-response.dto';
 
-/**
- * RoundResponseDto
- *
- * Output DTO representing a round with all relevant data.
- * Factory method converts domain Round to DTO.
- */
 export class RoundResponseDto {
   constructor(
     readonly id: string,
@@ -23,11 +17,6 @@ export class RoundResponseDto {
     readonly updatedAt: Date,
   ) {}
 
-  /**
-   * Factory method to convert domain Round entity to DTO
-   * @param round - Domain Round entity
-   * @returns RoundResponseDto
-   */
   static fromDomain(round: any): RoundResponseDto {
     const bets = round.bets.map((bet: any) => BetResponseDto.fromDomain(bet));
 

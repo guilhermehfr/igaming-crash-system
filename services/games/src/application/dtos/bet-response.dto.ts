@@ -1,9 +1,3 @@
-/**
- * BetResponseDto
- *
- * Output DTO representing a bet with all relevant data.
- * Factory method converts domain Bet to DTO.
- */
 export class BetResponseDto {
   constructor(
     readonly id: string,
@@ -20,11 +14,6 @@ export class BetResponseDto {
     readonly createdAt: Date,
   ) {}
 
-  /**
-   * Factory method to convert domain Bet entity to DTO
-   * @param bet - Domain Bet entity
-   * @returns BetResponseDto
-   */
   static fromDomain(bet: any): BetResponseDto {
     return new BetResponseDto(
       bet.id,
