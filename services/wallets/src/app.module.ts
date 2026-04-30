@@ -1,7 +1,39 @@
-import { Module } from "@nestjs/common";
-import { WalletsController } from "./presentation/controllers/wallets.controller";
+import { Module } from '@nestjs/common'
+import { TypeOrmModule } from '@nestjs/typeorm'
+import { WalletTypeormEntity } from './infrastructure/typeorm/wallet.typeorm-entity'
+import { WalletRepository } from './infrastructure/typeorm/wallet.repository'
+import { CreateWalletUseCase } from './application/use-cases/create-wallet.use-case'
+import { GetWalletUseCase } from './application/use-cases/get-wallet.use-case'
+import { DebitWalletUseCase } from './application/use-cases/debit-wallet.use-case'
+import { CreditWalletUseCase } from './application/use-cases/credit-wallet.use-case'
+import { WalletsController } from './presentation/controllers/wallets.controller'
 
 @Module({
+  imports: [
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: process.env.DB_HOST ?? 'localhost',
+      port: Number(process.env.DB_PORT ?? 5432),
+      username: process.env.DB_USER ?? 'admin',
+      password: process.env.DB_PASS ?? 'admin',
+      database: process.env.DB_NAME ?? 'wallets',
+      entities: [WalletTypeormEntity],
+      migrations: ['dist/infrastructure/typeorm/migrations/*.js'],
+      migrationsRun: true,
+      synchronize: false,
+    }),
+    TypeOrmModule.forFeature([WalletTypeormEntity]),
+  ],
+  providers: [
+    {
+      provide: 'IWalletRepository',
+      useClass: WalletRepository,
+    },
+    CreateWalletUseCase,
+    GetWalletUseCase,
+    DebitWalletUseCase,
+    CreditWalletUseCase,
+  ],
   controllers: [WalletsController],
 })
 export class AppModule {}

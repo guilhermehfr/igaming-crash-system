@@ -1,11 +1,5 @@
 import { MigrationInterface, QueryRunner, Table } from 'typeorm';
 
-/**
- * CreateWallets Migration
- * 
- * Creates the schema for:
- * - wallets table: Stores user wallet balances with BigInt precision
- */
 export class CreateWallets1704067200001 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.createTable(
