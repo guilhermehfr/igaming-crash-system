@@ -1,8 +1,14 @@
-import { IWalletRepository } from '../../domain/wallet.repository';
+import { Inject, Injectable } from '@nestjs/common';
+import type { IWalletRepository } from '../../domain/wallet.repository';
 import { Money } from '../../domain/money.value-object';
 import { WalletResponseDto } from '../dtos/wallet-response.dto';
+
+@Injectable()
 export class DebitWalletUseCase {
-  constructor(private readonly walletRepository: IWalletRepository) {}
+  constructor(
+    @Inject('IWalletRepository')
+    private readonly walletRepository: IWalletRepository,
+  ) {}
 
   async execute(userId: string, amountInMainUnit: number): Promise<WalletResponseDto> {
     if (!userId || userId.trim() === '') {

@@ -4,6 +4,9 @@ import { Round } from '../../domain/round.entity';
 import { Bet } from '../../domain/bet.entity';
 import { CrashPoint } from '../../domain/crash-point.vo';
 import type { IRoundRepository } from '../../domain/round.repository';
+import { GamesGateway } from '../../presentation/gateway/games.gateway';
+import { RabbitMQPublisherService } from '../../infrastructure/rabbitmq/rabbitmq-publisher.service';
+import type { IBetPlacedEvent, IBetCashedOutEvent } from '../../../../packages/events';
 
 @Injectable()
 export class RoundLifecycleService implements OnModuleDestroy {
@@ -20,6 +23,8 @@ export class RoundLifecycleService implements OnModuleDestroy {
   constructor(
     @Inject('IRoundRepository')
     private readonly roundRepository: IRoundRepository,
+    private readonly gamesGateway: GamesGateway,
+    private readonly rabbitmqPublisher: RabbitMQPublisherService,
   ) {}
 
   async initializeNewRound(): Promise<void> {
@@ -38,6 +43,12 @@ export class RoundLifecycleService implements OnModuleDestroy {
     if (!this.currentRound) return;
 
     this.logger.log(`Betting phase started for round ${this.currentRound.id}`);
+
+    this.gamesGateway.emitRoundStateChange(
+      this.currentRound.id,
+      this.currentRound.state,
+      null,
+    );
 
     this.bettingTimerId = setTimeout(async () => {
       await this.transitionToRunning();
@@ -65,6 +76,12 @@ export class RoundLifecycleService implements OnModuleDestroy {
         `Round ${this.currentRound.id} now RUNNING with crash point ${crashPointMultiplier}`,
       );
 
+      this.gamesGateway.emitRoundStateChange(
+        this.currentRound.id,
+        this.currentRound.state,
+        crashPointMultiplier,
+      );
+
       this.startMultiplierLoop();
     } catch (error) {
       this.logger.error(
@@ -88,6 +105,12 @@ export class RoundLifecycleService implements OnModuleDestroy {
         currentMultiplier = Math.round((currentMultiplier + this.MULTIPLIER_INCREMENT_RATE) * 1000) / 1000;
 
         this.currentRound.updateMultiplier(currentMultiplier);
+
+        this.gamesGateway.emitMultiplierUpdate(
+          this.currentRound.id,
+          currentMultiplier,
+          this.currentRound.state,
+        );
 
         if (this.currentRound.hasCrashed()) {
           clearInterval(this.multiplierTimerId!);
@@ -117,6 +140,25 @@ export class RoundLifecycleService implements OnModuleDestroy {
       const stats = this.currentRound.getStatistics();
       this.logger.log(`Round settled: ${JSON.stringify(stats)}`);
 
+      this.gamesGateway.emitRoundCrashed(
+        this.currentRound.id,
+        this.currentRound.currentMultiplier,
+        stats,
+      );
+
+      for (const bet of this.currentRound.bets) {
+        if (bet.state === 'PENDING') {
+          const betLostEvent: IBetPlacedEvent = {
+            betId: bet.id,
+            userId: bet.playerId,
+            amountInCentavos: bet.betAmountInCentavos.toString(),
+            roundId: this.currentRound.id,
+            timestamp: new Date().toISOString(),
+          };
+          await this.rabbitmqPublisher.publishBetLost(betLostEvent);
+        }
+      }
+
       setTimeout(() => {
         this.initializeNewRound();
       }, 5000);
@@ -136,6 +178,22 @@ export class RoundLifecycleService implements OnModuleDestroy {
       this.currentRound.placeBet(bet);
       await this.roundRepository.save(this.currentRound);
       this.logger.log(`Bet placed: ${bet.id} in round ${this.currentRound.id}`);
+
+      this.gamesGateway.emitBetPlaced(this.currentRound.id, {
+        id: bet.id,
+        userId: bet.playerId,
+        amountInMainUnit: Number(bet.betAmountInCentavos) / 100,
+        state: bet.state,
+      });
+
+      const betPlacedEvent: IBetPlacedEvent = {
+        betId: bet.id,
+        userId: bet.playerId,
+        amountInCentavos: bet.betAmountInCentavos.toString(),
+        roundId: this.currentRound.id,
+        timestamp: new Date().toISOString(),
+      };
+      await this.rabbitmqPublisher.publishBetPlaced(betPlacedEvent);
     } catch (error) {
       this.logger.error(
         `Error placing bet: ${error instanceof Error ? error.message : String(error)}`,
@@ -155,6 +213,27 @@ export class RoundLifecycleService implements OnModuleDestroy {
       this.logger.log(
         `Bet cashed out: ${betId} at multiplier ${multiplier} in round ${this.currentRound.id}`,
       );
+
+      const bet = this.currentRound.bets.find((b) => b.id === betId);
+      if (bet) {
+        this.gamesGateway.emitBetCashedOut(this.currentRound.id, {
+          id: bet.id,
+          userId: bet.playerId,
+          multiplier: bet.cashOutMultiplier,
+          winningsInMainUnit: Number(bet.winningsInCentavos ?? 0n) / 100,
+        });
+
+        const betCashedOutEvent: IBetCashedOutEvent = {
+          betId: bet.id,
+          userId: bet.playerId,
+          amountInCentavos: bet.betAmountInCentavos.toString(),
+          winningsInCentavos: (bet.winningsInCentavos ?? 0n).toString(),
+          multiplier: bet.cashOutMultiplier!,
+          roundId: this.currentRound.id,
+          timestamp: new Date().toISOString(),
+        };
+        await this.rabbitmqPublisher.publishBetCashedOut(betCashedOutEvent);
+      }
     } catch (error) {
       this.logger.error(
         `Error cashing out bet: ${error instanceof Error ? error.message : String(error)}`,

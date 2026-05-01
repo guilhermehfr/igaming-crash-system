@@ -1,10 +1,16 @@
+import { Inject, Injectable } from '@nestjs/common';
 import { Wallet } from '../../domain/wallet.entity';
 import { Money } from '../../domain/money.value-object';
-import { IWalletRepository } from '../../domain/wallet.repository';
+import type { IWalletRepository } from '../../domain/wallet.repository';
 import { CreateWalletDto } from '../dtos/create-wallet.dto';
 import { WalletResponseDto } from '../dtos/wallet-response.dto';
+
+@Injectable()
 export class CreateWalletUseCase {
-  constructor(private readonly walletRepository: IWalletRepository) {}
+  constructor(
+    @Inject('IWalletRepository')
+    private readonly walletRepository: IWalletRepository,
+  ) {}
 
   async execute(input: CreateWalletDto): Promise<WalletResponseDto> {
     if (!input.userId || input.userId.trim() === '') {

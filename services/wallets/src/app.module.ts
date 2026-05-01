@@ -7,6 +7,7 @@ import { GetWalletUseCase } from './application/use-cases/get-wallet.use-case'
 import { DebitWalletUseCase } from './application/use-cases/debit-wallet.use-case'
 import { CreditWalletUseCase } from './application/use-cases/credit-wallet.use-case'
 import { WalletsController } from './presentation/controllers/wallets.controller'
+import { RabbitMQConsumerService } from './infrastructure/rabbitmq/rabbitmq-consumer.service'
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { WalletsController } from './presentation/controllers/wallets.controller
       entities: [WalletTypeormEntity],
       migrations: ['dist/infrastructure/typeorm/migrations/*.js'],
       migrationsRun: true,
-      synchronize: false,
+      synchronize: true,
     }),
     TypeOrmModule.forFeature([WalletTypeormEntity]),
   ],
@@ -33,6 +34,7 @@ import { WalletsController } from './presentation/controllers/wallets.controller
     GetWalletUseCase,
     DebitWalletUseCase,
     CreditWalletUseCase,
+    RabbitMQConsumerService,
   ],
   controllers: [WalletsController],
 })
