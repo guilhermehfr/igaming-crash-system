@@ -1,5 +1,5 @@
 
-# Crash Game 🎲
+# Igaming Crash System 🎲
 
 Um jogo de crash multiplayer em tempo real. Jogadores apostam antes de cada rodada, acompanham o multiplicador subir e sacam antes do crash - ou perdem tudo.
 
