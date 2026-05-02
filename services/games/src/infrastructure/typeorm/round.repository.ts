@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Round, RoundState } from '../../domain/round.entity';
 import { Bet, BetState } from '../../domain/bet.entity';
 import { CrashPoint } from '../../domain/crash-point.vo';
@@ -43,7 +43,7 @@ export class RoundRepository implements IRoundRepository {
 
   async findMostRecent(): Promise<Round | null> {
     const roundEntity = await this.roundRepository.findOne({
-      where: {},
+      where: { state: In(['BETTING', 'RUNNING']) },
       relations: ['bets'],
       order: { createdAt: 'DESC' },
     });

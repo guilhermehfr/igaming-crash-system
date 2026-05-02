@@ -181,7 +181,11 @@ export class Round {
 
     this.bets.forEach((bet) => {
       if (bet.isPending()) {
-        bet.lose();
+        // Only mark as LOST if bet amount > 0 (not watch-only)
+        if (bet.betAmountInCentavos > 0n) {
+          bet.lose();
+        }
+        // Watch-only bets (amount = 0) stay PENDING - no win, no loss
       }
     });
   }
@@ -204,20 +208,17 @@ export class Round {
     }
   }
 
-  cashOut(betId: string, multiplier: number): void {
+cashOut(betId: string, multiplier: number): void {
     this.validateRunningOperationsAllowed();
 
-    const bet = this.getBet(betId);
+    const bet = this.bets.find((b) => b.id === betId);
     if (!bet) {
-      throw new Error(`Bet ${betId} not found in this round`);
+      throw new Error('Bet not found');
     }
 
-    if (!bet.isPending()) {
-      throw new Error(`Bet ${betId} is not in PENDING state`);
-    }
-
-    if (this._crashPoint && this._crashPoint.hasCrashed(multiplier)) {
-      throw new Error('Cannot cash out after crash point');
+    // Cannot cash out with 0 bet (watch-only)
+    if (bet.betAmountInCentavos === 0n) {
+      throw new Error('Cannot cash out with zero bet');
     }
 
     bet.cashOut(multiplier);

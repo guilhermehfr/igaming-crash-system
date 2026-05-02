@@ -1,4 +1,4 @@
-import { Injectable, Inject, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Inject, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { createHmac } from 'crypto';
 import { Round } from '../../domain/round.entity';
 import { Bet } from '../../domain/bet.entity';
@@ -9,16 +9,18 @@ import { RabbitMQPublisherService } from '../../infrastructure/rabbitmq/rabbitmq
 import type { IBetPlacedEvent, IBetCashedOutEvent } from '../../../../packages/events';
 
 @Injectable()
-export class RoundLifecycleService implements OnModuleDestroy {
+export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
   private readonly logger = new Logger(RoundLifecycleService.name);
 
   private currentRound: Round | null = null;
   private bettingTimerId: NodeJS.Timeout | null = null;
   private multiplierTimerId: NodeJS.Timeout | null = null;
 
-  private readonly BETTING_PHASE_DURATION_MS = 10000;
+private readonly BETTING_PHASE_DURATION_MS = 5000;
   private readonly MULTIPLIER_INCREMENT_INTERVAL_MS = 100;
-  private readonly MULTIPLIER_INCREMENT_RATE = 0.001;
+  private readonly MULTIPLIER_INCREMENT_RATE = 0.01; // 0.01 per 100ms = 100ms per 1x = ~30s to 10x
+  private readonly CRASHED_PAUSE_DURATION_MS = 5000;
+  private hasBetBeenPlaced = false;
 
   constructor(
     @Inject('IRoundRepository')
@@ -26,6 +28,11 @@ export class RoundLifecycleService implements OnModuleDestroy {
     private readonly gamesGateway: GamesGateway,
     private readonly rabbitmqPublisher: RabbitMQPublisherService,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    // Don't auto-start round - wait for first bet
+    this.logger.log('Game service ready. Waiting for first bet to start round...');
+  }
 
   async initializeNewRound(): Promise<void> {
     this.logger.log('Initializing new round');
@@ -127,6 +134,12 @@ export class RoundLifecycleService implements OnModuleDestroy {
 
   private async transitionToCrashed(): Promise<void> {
     if (!this.currentRound) return;
+    
+    // Prevent double transition
+    if (this.currentRound.state === 'CRASHED') {
+      this.logger.warn('Round already crashed, skipping transition');
+      return;
+    }
 
     this.logger.log(
       `Round ${this.currentRound.id} crashed at multiplier ${this.currentRound.currentMultiplier}`,
@@ -159,9 +172,13 @@ export class RoundLifecycleService implements OnModuleDestroy {
         }
       }
 
-      setTimeout(() => {
-        this.initializeNewRound();
-      }, 5000);
+      setTimeout(async () => {
+        try {
+          await this.initializeNewRound();
+        } catch (error) {
+          this.logger.error(`Error initializing new round: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }, this.CRASHED_PAUSE_DURATION_MS);
     } catch (error) {
       this.logger.error(
         `Error transitioning to CRASHED: ${error instanceof Error ? error.message : String(error)}`,
@@ -186,14 +203,26 @@ export class RoundLifecycleService implements OnModuleDestroy {
         state: bet.state,
       });
 
-      const betPlacedEvent: IBetPlacedEvent = {
-        betId: bet.id,
-        userId: bet.playerId,
-        amountInCentavos: bet.betAmountInCentavos.toString(),
-        roundId: this.currentRound.id,
-        timestamp: new Date().toISOString(),
-      };
-      await this.rabbitmqPublisher.publishBetPlaced(betPlacedEvent);
+      // Start timer after FIRST bet is placed (not on round create)
+      if (!this.hasBetBeenPlaced) {
+        this.hasBetBeenPlaced = true
+        this.startBettingPhase()
+        this.logger.log(`First bet placed, starting ${this.BETTING_PHASE_DURATION_MS}ms betting timer...`)
+      }
+
+      // Publish event (non-blocking - don't throw if fails)
+      try {
+        const betPlacedEvent: IBetPlacedEvent = {
+          betId: bet.id,
+          userId: bet.playerId,
+          amountInCentavos: bet.betAmountInCentavos.toString(),
+          roundId: this.currentRound.id,
+          timestamp: new Date().toISOString(),
+        };
+        await this.rabbitmqPublisher.publishBetPlaced(betPlacedEvent);
+      } catch (mqError) {
+        this.logger.warn(`RabbitMQ publish failed (non-blocking): ${mqError instanceof Error ? mqError.message : String(mqError)}`);
+      }
     } catch (error) {
       this.logger.error(
         `Error placing bet: ${error instanceof Error ? error.message : String(error)}`,

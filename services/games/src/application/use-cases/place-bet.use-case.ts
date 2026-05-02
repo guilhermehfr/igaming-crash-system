@@ -14,18 +14,29 @@ export class PlaceBetUseCase {
       throw new Error('User ID must be non-empty');
     }
 
-    if (input.amountInMainUnit <= 0) {
-      throw new Error('Bet amount must be greater than zero');
+    // Allow 0 bet - user watches but doesn't participate in winnings/losses
+    if (input.amountInMainUnit < 0) {
+      throw new Error('Bet amount must be zero or greater');
     }
 
+    const isWatchOnly = input.amountInMainUnit === 0;
+
     this.logger.debug(
-      `Placing bet: userId=${input.userId}, amount=${input.amountInMainUnit}`,
+      `Placing bet: userId=${input.userId}, amount=${input.amountInMainUnit}${isWatchOnly ? ' (WATCH ONLY)' : ''}`,
     );
 
     try {
-      const currentRound = this.roundLifecycleService.getCurrentRound();
+      let currentRound = this.roundLifecycleService.getCurrentRound();
+      
+      // If no round exists, create one (first bet triggers the cycle)
       if (!currentRound) {
-        throw new Error('No active round available');
+        this.logger.log('No round exists, creating new round...');
+        await this.roundLifecycleService.initializeNewRound();
+        currentRound = this.roundLifecycleService.getCurrentRound();
+      }
+
+      if (!currentRound) {
+        throw new Error('Failed to create round');
       }
 
       const betId = `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

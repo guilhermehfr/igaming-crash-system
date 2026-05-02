@@ -48,10 +48,10 @@ export class Bet {
     playerId: string,
     betAmountInCentavos: bigint,
   ): Bet {
-    if (betAmountInCentavos <= 0n) {
-      throw new Error('Bet amount must be greater than zero');
+    if (betAmountInCentavos < 0n) {
+      throw new Error('Bet amount must be zero or greater');
     }
-
+    
     return new Bet(id, roundId, playerId, betAmountInCentavos);
   }
 
