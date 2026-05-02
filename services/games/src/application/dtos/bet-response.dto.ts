@@ -3,29 +3,27 @@ export class BetResponseDto {
     readonly id: string,
     readonly userId: string,
     readonly amountInMainUnit: number,
-    readonly amountInCentavos: bigint,
     readonly state: 'PENDING' | 'CASHED_OUT' | 'LOST',
     readonly winningsInMainUnit: number,
-    readonly winningsInCentavos: bigint,
     readonly multiplier: number | null,
     readonly profitLossInMainUnit: number,
-    readonly profitLossInCentavos: bigint,
     readonly roi: number | null,
     readonly createdAt: Date,
   ) {}
 
   static fromDomain(bet: any): BetResponseDto {
+    const betAmountInCentavos = bet.betAmountInCentavos;
+    const winningsInCentavos = bet.winningsInCentavos ?? 0n;
+    const profitLossInCentavos = bet.calculateProfitLoss();
+
     return new BetResponseDto(
       bet.id,
-      bet.userId,
-      bet.amountInMainUnit,
-      bet.amountInCentavos,
-      bet.getState(),
-      bet.getWinningsInMainUnit(),
-      bet.getWinningsInCentavos(),
-      bet.multiplier || null,
-      bet.calculateProfitLossInMainUnit(),
-      bet.calculateProfitLossInCentavos(),
+      bet.playerId,
+      Number(betAmountInCentavos) / 100,
+      bet.state,
+      Number(winningsInCentavos) / 100,
+      bet.cashOutMultiplier,
+      Number(profitLossInCentavos) / 100,
       bet.calculateROI(),
       bet.createdAt,
     );

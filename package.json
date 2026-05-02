@@ -9,7 +9,7 @@
   "scripts": {
     "docker:up": "docker compose up",
     "docker:down": "docker compose down",
-    "docker:prune": "docker compose down -v --rmi all --remove-orphans && docker volume prune -f"
+    "docker:reset": "docker compose down -v --rmi all --remove-orphans"
   },
   "devDependencies": {
     "bun-types": "latest"

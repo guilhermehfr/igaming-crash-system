@@ -9,6 +9,8 @@ import { CashOutUseCase } from './application/use-cases/cash-out.use-case'
 import { GetCurrentRoundUseCase } from './application/use-cases/get-current-round.use-case'
 import { GetRoundHistoryUseCase } from './application/use-cases/get-round-history.use-case'
 import { GamesController } from './presentation/controllers/games.controller'
+import { GamesGateway } from './presentation/gateway/games.gateway'
+import { RabbitMQPublisherService } from './infrastructure/rabbitmq/rabbitmq-publisher.service'
 
 @Module({
   imports: [
@@ -22,7 +24,7 @@ import { GamesController } from './presentation/controllers/games.controller'
       entities: [RoundTypeormEntity, BetTypeormEntity],
       migrations: ['dist/infrastructure/typeorm/migrations/*.js'],
       migrationsRun: true,
-      synchronize: false,
+      synchronize: true,
     }),
     TypeOrmModule.forFeature([RoundTypeormEntity, BetTypeormEntity]),
   ],
@@ -31,6 +33,8 @@ import { GamesController } from './presentation/controllers/games.controller'
       provide: 'IRoundRepository',
       useClass: RoundRepository,
     },
+    GamesGateway,
+    RabbitMQPublisherService,
     RoundLifecycleService,
     PlaceBetUseCase,
     CashOutUseCase,

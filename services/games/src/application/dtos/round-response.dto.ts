@@ -7,11 +7,8 @@ export class RoundResponseDto {
     readonly currentMultiplier: number,
     readonly crashPointMultiplier: number | null,
     readonly totalWageredInMainUnit: number,
-    readonly totalWageredInCentavos: bigint,
     readonly totalWinningsInMainUnit: number,
-    readonly totalWinningsInCentavos: bigint,
     readonly houseResultInMainUnit: number,
-    readonly houseResultInCentavos: bigint,
     readonly bets: BetResponseDto[],
     readonly createdAt: Date,
     readonly updatedAt: Date,
@@ -20,17 +17,18 @@ export class RoundResponseDto {
   static fromDomain(round: any): RoundResponseDto {
     const bets = round.bets.map((bet: any) => BetResponseDto.fromDomain(bet));
 
+    const totalWageredInCentavos = round.calculateTotalWagered();
+    const totalWinningsInCentavos = round.calculateTotalWinnings();
+    const houseResultInCentavos = round.calculateHouseResult();
+
     return new RoundResponseDto(
       round.id,
       round.state,
       round.currentMultiplier,
       round.crashPoint?.multiplier || null,
-      round.calculateTotalWageredInMainUnit(),
-      round.calculateTotalWagered(),
-      round.calculateTotalWinningsInMainUnit(),
-      round.calculateTotalWinnings(),
-      round.calculateHouseResultInMainUnit(),
-      round.calculateHouseResult(),
+      Number(totalWageredInCentavos) / 100,
+      Number(totalWinningsInCentavos) / 100,
+      Number(houseResultInCentavos) / 100,
       bets,
       round.createdAt,
       round.updatedAt,
