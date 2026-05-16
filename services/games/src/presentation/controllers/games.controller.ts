@@ -12,6 +12,7 @@ import { PlaceBetUseCase } from '../../application/use-cases/place-bet.use-case'
 import { CashOutUseCase } from '../../application/use-cases/cash-out.use-case';
 import { GetCurrentRoundUseCase } from '../../application/use-cases/get-current-round.use-case';
 import { GetRoundHistoryUseCase } from '../../application/use-cases/get-round-history.use-case';
+import { GetBetUseCase } from '../../application/use-cases/get-bet.use-case';
 import { RoundLifecycleService } from '../../application/services/round-lifecycle.service';
 import { PlaceBetDto } from '../../application/dtos/place-bet.dto';
 import { CashOutDto } from '../../application/dtos/cash-out.dto';
@@ -26,6 +27,7 @@ export class GamesController {
     private readonly cashOutUseCase: CashOutUseCase,
     private readonly getCurrentRoundUseCase: GetCurrentRoundUseCase,
     private readonly getRoundHistoryUseCase: GetRoundHistoryUseCase,
+    private readonly getBetUseCase: GetBetUseCase,
     private readonly roundLifecycleService: RoundLifecycleService,
   ) {}
 
@@ -53,6 +55,20 @@ export class GamesController {
     try {
       const dto = new CashOutDto(betId, body.multiplier);
       return await this.cashOutUseCase.execute(dto);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new HttpException(message, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  @Get('bets/:betId')
+  async getBet(@Param('betId') betId: string): Promise<BetResponseDto> {
+    try {
+      const bet = await this.getBetUseCase.execute(betId);
+      if (!bet) {
+        throw new HttpException('Bet not found', HttpStatus.NOT_FOUND);
+      }
+      return bet;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new HttpException(message, HttpStatus.BAD_REQUEST);
@@ -88,7 +104,7 @@ export class GamesController {
   async createRound(): Promise<RoundResponseDto> {
     try {
       const existingRound = this.roundLifecycleService.getCurrentRound();
-      if (existingRound) {
+      if (existingRound && existingRound.state !== 'CRASHED') {
         throw new Error('A round is already active');
       }
 

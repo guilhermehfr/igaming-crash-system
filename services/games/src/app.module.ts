@@ -8,6 +8,7 @@ import { PlaceBetUseCase } from './application/use-cases/place-bet.use-case'
 import { CashOutUseCase } from './application/use-cases/cash-out.use-case'
 import { GetCurrentRoundUseCase } from './application/use-cases/get-current-round.use-case'
 import { GetRoundHistoryUseCase } from './application/use-cases/get-round-history.use-case'
+import { GetBetUseCase } from './application/use-cases/get-bet.use-case'
 import { GamesController } from './presentation/controllers/games.controller'
 import { GamesGateway } from './presentation/gateway/games.gateway'
 import { RabbitMQPublisherService } from './infrastructure/rabbitmq/rabbitmq-publisher.service'
@@ -40,6 +41,7 @@ import { RabbitMQPublisherService } from './infrastructure/rabbitmq/rabbitmq-pub
     CashOutUseCase,
     GetCurrentRoundUseCase,
     GetRoundHistoryUseCase,
+    GetBetUseCase,
   ],
   controllers: [GamesController],
 })
