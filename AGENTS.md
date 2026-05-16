@@ -294,6 +294,27 @@ interface IWalletRepository {
 - **Real-Time**: Socket.io 4.8.3 (games service - ✅ implemented)
 - **Testing**: Bun native test framework
 
+## Reliability
+
+### Idempotent Consumers
+* Idempotency keys (eventId) stored in `consumed_events` table with unique constraint
+* Duplicate events → skipped safely without processing
+* Implementation: `services/wallets/src/domain/consumed-event.repository.ts`
+
+### ACK Only After Success
+* Messages acknowledged only after DB write completes
+* Implementation: `services/wallets/src/infrastructure/rabbitmq/rabbitmq-consumer.service.ts`
+
+### at-least-once Delivery
+* Retry mechanism: max 3 retries with exponential backoff (1s → 2s → 4s)
+* After 3 failures → message sent to DLQ
+
+### DLQ Strategy
+* Exchange: `dlx` (direct)
+* Queues: `games.bet.placed.dlq`, `games.bet.cashed-out.dlq`, `games.bet.lost.dlq`
+* Retention: 7 days (604800000ms TTL)
+* Purpose: Manual inspection of permanently failed messages
+
 ## Common Development Commands
 
 ### Development
@@ -369,8 +390,8 @@ psql -h localhost -U admin -d wallets -W
 
 ```bash
 # Health check endpoints
-curl http://localhost:4001/health   # Games service
-curl http://localhost:4002/health   # Wallets service
+curl http://localhost:4001/games/health   # Games service
+curl http://localhost:4002/wallets/health   # Wallets service
 
 # Kong admin API
 curl http://localhost:8001/services # List all Kong services
@@ -463,12 +484,14 @@ Infrastructure layer:
 3. **DebitWalletUseCase** (82 lines)
    - Input: userId, amountInMainUnit
    - Output: `WalletResponseDto`
+   - HTTP: `POST /wallets/:userId/debit`
    - RabbitMQ Event: `BetPlaced`
    - Validates sufficient funds BEFORE withdrawal, throws descriptive error if insufficient
 
 4. **CreditWalletUseCase** (79 lines)
    - Input: userId, amountInMainUnit
    - Output: `WalletResponseDto`
+   - HTTP: `POST /wallets/:userId/credit`
    - RabbitMQ Event: `BetCashedOut`
    - Credits winnings to wallet, always succeeds for positive amounts
 
@@ -488,7 +511,7 @@ Infrastructure layer:
 **Critical Service** (`services/games/src/application/services/`):
 
 **RoundLifecycleService** (380 lines) - Orchestrates entire game loop:
-- **BETTING Phase** (10s timer):
+- **BETTING Phase** (5s timer):
   - Accepts player bets via `placeBet(bet)`
   - Auto-transitions to RUNNING after timer expires
   - Timer: `bettingTimerId` managed by NestJS lifecycle
@@ -543,6 +566,12 @@ Infrastructure layer:
    - HTTP: `GET /games/history?page=1&limit=10`
    - Query repository with pagination (max limit: 100)
    - Returns only CRASHED (settled) rounds ordered by recent first
+
+5. **CreateRoundUseCase** (internal use)
+   - Input: none
+   - Output: `RoundResponseDto`
+   - HTTP: `POST /games/rounds`
+   - Creates new round in BETTING state (manual trigger for testing)
 
 **WebSocket Gateway** (`services/games/src/presentation/gateway/games.gateway.ts`):
    - Events broadcast via Socket.io on port 4001 (same as HTTP)
@@ -621,15 +650,11 @@ balanceInCentavos: bigint
 | CreateRoundsAndBets | `games/src/infrastructure/typeorm/migrations/1704067200000-create-rounds-and-bets.ts` | rounds, bets |
 | CreateWallets | `wallets/src/infrastructure/typeorm/migrations/1704067200001-create-wallets.ts` | wallets |
 
-### Presentation Layer (⚠️ Minimal)
+### Presentation Layer (✅ Complete)
 - **Location**: `services/*/src/presentation/`
-- **Current State**: Only health check endpoint
-- **To Implement**:
-  - REST controllers for CRUD operations
-  - WebSocket gateway for real-time multiplier updates
-  - DTOs for request/response
-  - Error handling & validation pipes
-  - Swagger documentation
+- **Current State**: Full REST controllers implemented
+- **Games Endpoints** (7): health, bets, bets/:id/cash-out, bets/:betId, current, history, rounds
+- **Wallets Endpoints** (5): health, create, get, debit, credit
 
 ## Critical Context for Implementation
 
