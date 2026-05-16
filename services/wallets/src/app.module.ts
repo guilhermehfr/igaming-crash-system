@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common'
 import { TypeOrmModule } from '@nestjs/typeorm'
 import { WalletTypeormEntity } from './infrastructure/typeorm/wallet.typeorm-entity'
+import { ConsumedEventTypeormEntity } from './infrastructure/typeorm/consumed-event.typeorm-entity'
 import { WalletRepository } from './infrastructure/typeorm/wallet.repository'
+import { ConsumedEventRepository } from './infrastructure/typeorm/consumed-event.repository'
 import { CreateWalletUseCase } from './application/use-cases/create-wallet.use-case'
 import { GetWalletUseCase } from './application/use-cases/get-wallet.use-case'
 import { DebitWalletUseCase } from './application/use-cases/debit-wallet.use-case'
@@ -18,17 +20,21 @@ import { RabbitMQConsumerService } from './infrastructure/rabbitmq/rabbitmq-cons
       username: process.env.DB_USER ?? 'admin',
       password: process.env.DB_PASS ?? 'admin',
       database: process.env.DB_NAME ?? 'wallets',
-      entities: [WalletTypeormEntity],
+      entities: [WalletTypeormEntity, ConsumedEventTypeormEntity],
       migrations: ['dist/infrastructure/typeorm/migrations/*.js'],
       migrationsRun: true,
       synchronize: true,
     }),
-    TypeOrmModule.forFeature([WalletTypeormEntity]),
+    TypeOrmModule.forFeature([WalletTypeormEntity, ConsumedEventTypeormEntity]),
   ],
   providers: [
     {
       provide: 'IWalletRepository',
       useClass: WalletRepository,
+    },
+    {
+      provide: 'IConsumedEventRepository',
+      useClass: ConsumedEventRepository,
     },
     CreateWalletUseCase,
     GetWalletUseCase,

@@ -63,6 +63,22 @@ O sistema é dividido em dois serviços principais:
 
 ---
 
+## Confiabilidade
+
+* **Consumidores Idempotentes**: Eventos duplicados detectados via chaves de idempotência → ignorados com segurança
+* **ACK Apenas Após Sucesso**: Mensagens reconhecidas apenas após processamento + commit no banco
+* **Entrega at-least-once**: Mensagens falhas retentam até 3 vezes antes do tratamento
+* **Estratégia DLQ**: Mensagens que excedem retries máximos → Dead Letter Queue (7 dias de retenção)
+
+### Fluxo de Retry
+
+Evento → Processar → Sucesso → ACK
+                        └→ Falha
+                            ├→ retry < 3 → republicar com retry + 1
+                            └→ retry >= 3 → NACK → DLQ
+
+---
+
 ## 💰 Precisão Financeira
 
 * Valores armazenados estritamente como inteiros (centavos).
@@ -76,26 +92,28 @@ O sistema é dividido em dois serviços principais:
 Todas as rotas são expostas centralizadamente via Kong.
 
 ### Wallet
-* `GET /wallets/me`
 * `POST /wallets`
+* `GET /wallets/:userId`
+* `POST /wallets/:userId/debit`
+* `POST /wallets/:userId/credit`
 
 ### Game
-* `GET /games/rounds/current`
-* `GET /games/rounds/history`
-* `POST /games/bet`
-* `POST /games/bet/cashout`
+* `GET /games/current`
+* `GET /games/history`
+* `POST /games/bets`
+* `POST /games/bets/:betId/cash-out`
+* `POST /games/rounds`
 * `GET /games/rounds/:id/verify`
 
 ---
 
 ## 🔌 WebSocket Events
 
-* `round:betting`
-* `round:started`
-* `round:tick`
+* `round:state-changed`
+* `round:multiplier-updated`
+* `round:bet-placed`
+* `round:bet-cashed-out`
 * `round:crashed`
-* `bet:placed`
-* `bet:cashout`
 
 ---
 

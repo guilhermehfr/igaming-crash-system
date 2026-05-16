@@ -1,12 +1,12 @@
 import { Injectable, Inject, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { createHmac } from 'crypto';
+import { createHmac, randomUUID } from 'crypto';
 import { Round } from '../../domain/round.entity';
 import { Bet } from '../../domain/bet.entity';
 import { CrashPoint } from '../../domain/crash-point.vo';
 import type { IRoundRepository } from '../../domain/round.repository';
 import { GamesGateway } from '../../presentation/gateway/games.gateway';
 import { RabbitMQPublisherService } from '../../infrastructure/rabbitmq/rabbitmq-publisher.service';
-import type { IBetPlacedEvent, IBetCashedOutEvent } from '../../../../packages/events';
+import type { IBetPlacedEvent, IBetCashedOutEvent, IBetLostEvent } from '../../../../packages/events';
 
 @Injectable()
 export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
@@ -161,12 +161,16 @@ private readonly BETTING_PHASE_DURATION_MS = 5000;
 
       for (const bet of this.currentRound.bets) {
         if (bet.state === 'PENDING') {
-          const betLostEvent: IBetPlacedEvent = {
+          const betLostEvent: IBetLostEvent = {
+            type: 'bet.lost',
+            version: 1,
+            eventId: randomUUID(),
+            timestamp: new Date().toISOString(),
             betId: bet.id,
             userId: bet.playerId,
             amountInCentavos: bet.betAmountInCentavos.toString(),
             roundId: this.currentRound.id,
-            timestamp: new Date().toISOString(),
+            crashPoint: this.currentRound.crashPoint?.multiplier ?? 0,
           };
           await this.rabbitmqPublisher.publishBetLost(betLostEvent);
         }
@@ -213,11 +217,14 @@ private readonly BETTING_PHASE_DURATION_MS = 5000;
       // Publish event (non-blocking - don't throw if fails)
       try {
         const betPlacedEvent: IBetPlacedEvent = {
+          type: 'bet.placed',
+          version: 1,
+          eventId: randomUUID(),
+          timestamp: new Date().toISOString(),
           betId: bet.id,
           userId: bet.playerId,
           amountInCentavos: bet.betAmountInCentavos.toString(),
           roundId: this.currentRound.id,
-          timestamp: new Date().toISOString(),
         };
         await this.rabbitmqPublisher.publishBetPlaced(betPlacedEvent);
       } catch (mqError) {
@@ -253,13 +260,16 @@ private readonly BETTING_PHASE_DURATION_MS = 5000;
         });
 
         const betCashedOutEvent: IBetCashedOutEvent = {
+          type: 'bet.cashed-out',
+          version: 1,
+          eventId: randomUUID(),
+          timestamp: new Date().toISOString(),
           betId: bet.id,
           userId: bet.playerId,
           amountInCentavos: bet.betAmountInCentavos.toString(),
           winningsInCentavos: (bet.winningsInCentavos ?? 0n).toString(),
           multiplier: bet.cashOutMultiplier!,
           roundId: this.currentRound.id,
-          timestamp: new Date().toISOString(),
         };
         await this.rabbitmqPublisher.publishBetCashedOut(betCashedOutEvent);
       }

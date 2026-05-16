@@ -1,12 +1,11 @@
-export interface IBetCashedOutEvent {
-  type: 'bet.cashed-out';
+export interface IBetLostEvent {
+  type: 'bet.lost';
   version: 1;
   eventId: string;
   timestamp: string;
   betId: string;
   userId: string;
   amountInCentavos: string;
-  winningsInCentavos: string;
-  multiplier: number;
   roundId: string;
+  crashPoint: number;
 }
