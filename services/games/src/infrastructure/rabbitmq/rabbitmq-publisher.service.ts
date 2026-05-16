@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import * as amqp from 'amqplib'
-import type { IBetPlacedEvent, IBetCashedOutEvent } from '../../../../packages/events'
+import type { IBetPlacedEvent, IBetCashedOutEvent, IBetLostEvent } from '../../../../packages/events'
 
 @Injectable()
 export class RabbitMQPublisherService {
@@ -10,9 +10,10 @@ export class RabbitMQPublisherService {
 
   private async getChannel(): Promise<amqp.Channel> {
     if (!this.connection) {
-      this.connection = await amqp.connect('amqp://admin:admin@localhost:5672')
+      const rabbitUrl = process.env.RABBITMQ_URL ?? 'amqp://admin:admin@localhost:5672'
+      this.connection = await amqp.connect(rabbitUrl)
       this.channel = await this.connection.createChannel()
-      this.logger.log('Connected to RabbitMQ')
+      this.logger.log(`Connected to RabbitMQ broker: ${new URL(rabbitUrl).host}`)
     }
     return this.channel!
   }
@@ -20,7 +21,11 @@ export class RabbitMQPublisherService {
   async publishBetPlaced(event: IBetPlacedEvent): Promise<void> {
     try {
       const ch = await this.getChannel()
-      await ch.assertQueue('games.bet.placed', { durable: true })
+      await ch.assertQueue('games.bet.placed', {
+        durable: true,
+        deadLetterExchange: 'dlx',
+        deadLetterRoutingKey: 'games.bet.placed.dlq'
+      })
       ch.sendToQueue('games.bet.placed', Buffer.from(JSON.stringify(event)))
       this.logger.log(`Published BetPlaced: ${event.betId}`)
     } catch (error) {
@@ -34,7 +39,11 @@ export class RabbitMQPublisherService {
   async publishBetCashedOut(event: IBetCashedOutEvent): Promise<void> {
     try {
       const ch = await this.getChannel()
-      await ch.assertQueue('games.bet.cashed-out', { durable: true })
+      await ch.assertQueue('games.bet.cashed-out', {
+        durable: true,
+        deadLetterExchange: 'dlx',
+        deadLetterRoutingKey: 'games.bet.cashed-out.dlq'
+      })
       ch.sendToQueue('games.bet.cashed-out', Buffer.from(JSON.stringify(event)))
       this.logger.log(`Published BetCashedOut: ${event.betId}`)
     } catch (error) {
@@ -45,10 +54,14 @@ export class RabbitMQPublisherService {
     }
   }
 
-  async publishBetLost(event: IBetPlacedEvent): Promise<void> {
+  async publishBetLost(event: IBetLostEvent): Promise<void> {
     try {
       const ch = await this.getChannel()
-      await ch.assertQueue('games.bet.lost', { durable: true })
+      await ch.assertQueue('games.bet.lost', {
+        durable: true,
+        deadLetterExchange: 'dlx',
+        deadLetterRoutingKey: 'games.bet.lost.dlq'
+      })
       ch.sendToQueue('games.bet.lost', Buffer.from(JSON.stringify(event)))
       this.logger.log(`Published BetLost: ${event.betId}`)
     } catch (error) {
