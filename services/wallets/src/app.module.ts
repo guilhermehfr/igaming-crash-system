@@ -23,7 +23,7 @@ import { RabbitMQConsumerService } from './infrastructure/rabbitmq/rabbitmq-cons
       entities: [WalletTypeormEntity, ConsumedEventTypeormEntity],
       migrations: ['dist/infrastructure/typeorm/migrations/*.js'],
       migrationsRun: true,
-      synchronize: true,
+      synchronize: false,
     }),
     TypeOrmModule.forFeature([WalletTypeormEntity, ConsumedEventTypeormEntity]),
   ],
