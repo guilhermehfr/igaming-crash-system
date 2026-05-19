@@ -5,6 +5,7 @@ import {
   Body,
   Param,
   Query,
+  Headers,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
@@ -37,9 +38,18 @@ export class GamesController {
   }
 
   @Post('bets')
-  async placeBet(@Body() body: { userId: string; amountInMainUnit: number }): Promise<BetResponseDto> {
+  async placeBet(
+    @Headers('x-user-id') userId: string | undefined,
+    @Body() body: { amountInMainUnit: number; userId?: string },
+  ): Promise<BetResponseDto> {
     try {
-      const dto = new PlaceBetDto(body.userId, body.amountInMainUnit);
+      if (body.userId) {
+        throw new Error('User ID must not be provided in the request body');
+      }
+      if (!userId) {
+        throw new HttpException('Missing X-User-Id header', HttpStatus.BAD_REQUEST);
+      }
+      const dto = new PlaceBetDto(userId, body.amountInMainUnit);
       return await this.placeBetUseCase.execute(dto);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

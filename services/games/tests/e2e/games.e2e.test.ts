@@ -63,11 +63,21 @@ describe('Games E2E', () => {
   });
 
   describe('POST /games/bets', () => {
-    it('should reject invalid input (empty userId)', async () => {
+    it('should reject missing X-User-Id header', async () => {
       const { status } = await request(`${GAMES_URL}/games/bets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: '', amountInMainUnit: 10 }),
+        body: JSON.stringify({ amountInMainUnit: 10 }),
+      });
+
+      expect(status).toBeGreaterThanOrEqual(400);
+    });
+
+    it('should reject userId in body', async () => {
+      const { status } = await request(`${GAMES_URL}/games/bets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': 'user-1' },
+        body: JSON.stringify({ userId: 'user-1', amountInMainUnit: 10 }),
       });
 
       expect(status).toBeGreaterThanOrEqual(400);
@@ -76,8 +86,8 @@ describe('Games E2E', () => {
     it('should reject invalid input (zero amount)', async () => {
       const { status } = await request(`${GAMES_URL}/games/bets`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: 'user-1', amountInMainUnit: 0 }),
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': 'user-1' },
+        body: JSON.stringify({ amountInMainUnit: 0 }),
       });
 
       expect(status).toBeGreaterThanOrEqual(400);
@@ -86,8 +96,8 @@ describe('Games E2E', () => {
     it('should reject invalid input (negative amount)', async () => {
       const { status } = await request(`${GAMES_URL}/games/bets`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: 'user-1', amountInMainUnit: -10 }),
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': 'user-1' },
+        body: JSON.stringify({ amountInMainUnit: -10 }),
       });
 
       expect(status).toBeGreaterThanOrEqual(400);
@@ -123,8 +133,8 @@ describe('Wallets E2E', () => {
     it('should create wallet', async () => {
       const { status, data } = await request(`${WALLETS_URL}/wallets`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: testUserId, initialBalanceInMainUnit: 100 }),
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': testUserId },
+        body: JSON.stringify({ initialBalanceInMainUnit: 100 }),
       });
 
       expect(status).toBeGreaterThanOrEqual(200);
@@ -133,11 +143,21 @@ describe('Wallets E2E', () => {
       expect(data.balanceInMainUnit).toBe(100);
     });
 
-    it('should reject empty userId', async () => {
+    it('should reject missing X-User-Id header', async () => {
       const { status } = await request(`${WALLETS_URL}/wallets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: '' }),
+        body: JSON.stringify({}),
+      });
+
+      expect(status).toBeGreaterThanOrEqual(400);
+    });
+
+    it('should reject userId in body', async () => {
+      const { status } = await request(`${WALLETS_URL}/wallets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': testUserId },
+        body: JSON.stringify({ userId: testUserId }),
       });
 
       expect(status).toBeGreaterThanOrEqual(400);
@@ -151,18 +171,29 @@ describe('Wallets E2E', () => {
       // Create first
       await request(`${WALLETS_URL}/wallets`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
+        body: JSON.stringify({}),
       });
 
-      const { status, data } = await request(`${WALLETS_URL}/wallets/${userId}`);
+      const { status, data } = await request(`${WALLETS_URL}/wallets/${userId}`, {
+        headers: { 'X-User-Id': userId },
+      });
       expect(status).toBe(200);
       expect(data.userId).toBeDefined();
     });
 
     it('should return 404 for non-existent wallet', async () => {
-      const { status } = await request(`${WALLETS_URL}/wallets/non-existent-user-xyz`);
+      const { status } = await request(`${WALLETS_URL}/wallets/non-existent-user-xyz`, {
+        headers: { 'X-User-Id': 'non-existent-user-xyz' },
+      });
       expect(status).toBe(404);
+    });
+
+    it('should return 403 when path and header user mismatch', async () => {
+      const { status } = await request(`${WALLETS_URL}/wallets/path-user`, {
+        headers: { 'X-User-Id': 'header-user' },
+      });
+      expect(status).toBe(403);
     });
   });
 
@@ -172,13 +203,13 @@ describe('Wallets E2E', () => {
       
       await request(`${WALLETS_URL}/wallets`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, initialBalanceInMainUnit: 100 }),
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
+        body: JSON.stringify({ initialBalanceInMainUnit: 100 }),
       });
 
       const { status, data } = await request(`${WALLETS_URL}/wallets/${userId}/debit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
         body: JSON.stringify({ amountInMainUnit: 30 }),
       });
 
@@ -191,13 +222,13 @@ describe('Wallets E2E', () => {
       
       await request(`${WALLETS_URL}/wallets`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, initialBalanceInMainUnit: 10 }),
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
+        body: JSON.stringify({ initialBalanceInMainUnit: 10 }),
       });
 
       const { status } = await request(`${WALLETS_URL}/wallets/${userId}/debit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
         body: JSON.stringify({ amountInMainUnit: 50 }),
       });
 
@@ -211,13 +242,13 @@ describe('Wallets E2E', () => {
       
       await request(`${WALLETS_URL}/wallets`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, initialBalanceInMainUnit: 50 }),
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
+        body: JSON.stringify({ initialBalanceInMainUnit: 50 }),
       });
 
       const { status, data } = await request(`${WALLETS_URL}/wallets/${userId}/credit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
         body: JSON.stringify({ amountInMainUnit: 25 }),
       });
 
