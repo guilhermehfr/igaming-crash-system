@@ -1,156 +1,200 @@
-# 🎲 Igaming Crash System
+# Igaming Crash System
 
 Real-time multiplayer game system based on the "crash game" model. Players place bets before each round and must cash out before the multiplier collapses.
 
-## ⚙️ Stack
+## Stack
 
-* **Backend:** NestJS · TypeScript · Node.js · Bun
-* **Frontend:** React · TypeScript · Vite *(Under development)*
-* **Database:** PostgreSQL
-* **Messaging:** RabbitMQ
-* **Gateway:** Kong
-* **Authentication:** Keycloak (OIDC)
-* **Infrastructure:** Docker · Docker Compose
-
----
-
-## 🧠 Architecture
-
-The system is split into two main services:
-
-### Game Service
-* Full round lifecycle management.
-* Crash point generation via *provably fair* algorithm.
-* Bet processing.
-* Real-time event broadcasting via WebSocket.
-
-### Wallet Service
-* Player balance management.
-* Event-driven debit and credit operations.
-* Financial consistency enforcement.
+- **Runtime**: Bun
+- **Backend**: NestJS · TypeScript
+- **Database**: PostgreSQL (3 databases: games, wallets, keycloak)
+- **Messaging**: RabbitMQ
+- **Gateway**: Kong (API Gateway)
+- **Authentication**: Keycloak (OIDC)
+- **Real-time**: Socket.io
+- **Infrastructure**: Docker · Docker Compose
 
 ---
 
-## 🔁 Communication
+## Architecture
 
-* Inter-service communication via RabbitMQ.
-* Decoupled integration based on events.
-* Fully event-driven system architecture.
+The system follows **Domain-Driven Design (DDD)** and **Hexagonal Architecture** with strict layer separation.
+
+### Services
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| **Games** | 4001 | Crash game rounds with state machine (BETTING → RUNNING → CRASHED) |
+| **Wallets** | 4002 | User account balances with monetary precision (BigInt) |
+| **Kong** | 8000 | API Gateway (routes /games → 4001, /wallets → 4002) |
+| **Keycloak** | 8080 | Identity Provider (OAuth2/OIDC) |
+| **RabbitMQ** | 5672 | Message broker for async inter-service communication |
+
+### Layer Structure
+
+```
+Presentation Layer (HTTP/WebSocket)
+        ↓
+Application Layer (Use Cases)
+        ↓
+Domain Layer (Business Logic)
+        ↓
+Infrastructure Layer (Adapters, DB, Messaging)
+```
+
+---
+
+## Domain Layer
+
+### Round (Aggregate Root)
+
+Explicit state machine with no state regression:
+
+```
+BETTING ──startRound()──→ RUNNING ──crash()──→ CRASHED
+```
+
+- **BETTING**: Accept player bets; crash point must be set before transition
+- **RUNNING**: Multiplier increments; players can cash out; auto-crash when multiplier ≥ crashPoint
+- **CRASHED**: All PENDING bets marked LOST; round is read-only
+
+### Bet (Entity)
+
+State lifecycle: `PENDING → CASHED_OUT` (player won) or `PENDING → LOST` (round crashed)
+
+### Wallet (Aggregate Root)
+
+No state machine; simple CRUD aggregate with balance management.
+
+### Money (Value Object)
+
+Precision via BigInt (centavos = 1/100 of main unit, no floating-point errors).
+
+---
+
+## Communication
+
+- Inter-service communication via RabbitMQ
+- Decoupled integration based on events
+- Event-driven system architecture
 
 ### Core Workflows
-* `bet` ➔ event ➔ wallet debit.
-* `cashout` ➔ event ➔ wallet credit.
-* `crash` ➔ general round settlement.
+
+- `placeBet` → RabbitMQ event → wallet debit
+- `cashOut` → RabbitMQ event → wallet credit
+- `crash` → auto-liquidation of all PENDING bets
 
 ---
 
-## 🔐 Authentication
+## Authentication
 
-* Keycloak with OIDC protocol.
-* JWT Token validation handled directly at the gateway (Kong).
-* Access control per authenticated user.
+- Keycloak with OIDC protocol
+- JWT Token validation via Kong gateway
+- Access control per authenticated user
+- Test user: `player` / `player123`
+- Realm: `crash-game`, Client: `crash-game-client`
 
 ---
 
-## 🎮 Real-time
+## Real-time
 
-* WebSockets for round synchronization.
-* **State Events:**
-  * Betting started.
-  * Multiplier rising.
-  * Cashout.
-  * Crash.
+WebSockets for round synchronization (Games service on port 4001).
+
+### Events
+
+- `round:state-changed` - Round transitions (BETTING → RUNNING → CRASHED)
+- `round:multiplier-updated` - Every 100ms during RUNNING phase
+- `round:bet-placed` - When a bet is placed
+- `round:bet-cashed-out` - When a bet is cashed out
+- `round:crashed` - When round crashes (includes statistics)
 
 ---
 
 ## Reliability
 
-* **Idempotent Consumers**: Duplicate events detected via eventId (stored in consumed_events table with unique constraint) → skipped safely
-* **ACK Only After Success**: Messages acknowledged only after successful event processing + DB commit
-* **at-least-once Delivery**: Failed messages retry up to 3 times before handling
-* **DLQ Strategy**: Messages exceeding max retries → Dead Letter Queue (7-day retention)
-
-### Retry Flow
-
-Event → Process → Success → ACK
-                    └→ Failure
-                        ├→ retry < 3 → republish with retry count + 1
-                        └→ retry >= 3 → NACK → DLQ
+- **Idempotent Consumers**: Duplicate events detected via eventId (stored in consumed_events table with unique constraint) → skipped safely
+- **ACK Only After Success**: Messages acknowledged only after successful event processing + DB commit
+- **at-least-once Delivery**: Failed messages retry up to 3 times with exponential backoff (1s → 2s → 4s)
+- **DLQ Strategy**: Messages exceeding max retries → Dead Letter Queue (7-day retention)
 
 ---
 
-## 💰 Financial Precision
+## Financial Precision
 
-* Values stored strictly as integers (cents).
-* Zero floating-point math (*float*) used in operations.
-* Rigid validations applied within the Wallet Service.
-
----
-
-## 📡 API (Gateway)
-
-All routes are exposed centrally through Kong.
-
-### Wallet
-* `POST /wallets`
-* `GET /wallets/:userId`
-* `POST /wallets/:userId/debit`
-* `POST /wallets/:userId/credit`
-
-### Game
-* `GET /games/current`
-* `GET /games/history`
-* `POST /games/bets`
-* `GET /games/bets/:betId`
-* `POST /games/bets/:betId/cash-out`
-* `POST /games/rounds`
+- Values stored strictly as BigInt (centavos)
+- Zero floating-point math used in monetary operations
+- Money value object enforces immutability and precision
+- Wallet service enforces rigid validations
 
 ---
 
-## 🔌 WebSocket Events
+## API (Gateway)
 
-* `round:state-changed`
-* `round:multiplier-updated`
-* `round:bet-placed`
-* `round:bet-cashed-out`
-* `round:crashed`
+All routes exposed through Kong (port 8000).
+
+### Wallet Endpoints
+
+- `POST /wallets` - Create wallet
+- `GET /wallets/:userId` - Get wallet by user ID
+- `POST /wallets/:userId/debit` - Debit wallet
+- `POST /wallets/:userId/credit` - Credit wallet
+
+### Game Endpoints
+
+- `GET /games/current` - Get current round
+- `GET /games/history` - Get round history (paginated)
+- `POST /games/bets` - Place a bet
+- `GET /games/bets/:betId` - Get bet by ID
+- `POST /games/bets/:betId/cash-out` - Cash out a bet
+- `POST /games/rounds` - Create a new round (manual trigger)
 
 ---
 
-## 🧪 Testing
+## Testing
 
-* Unit tests
-* Integration tests (routes)
-* Smoke tests
-* Load tests
+- **158 tests total**: 142 unit + 16 E2E
+- Bun native test framework
+- Domain layer thoroughly tested
+- Application layer use cases tested
 
 ---
 
-## 🧱 Project Structure
+## Project Structure
 
-```txt
+```
 ├── services/
 │   ├── games/
+│   │   └── src/
+│   │       ├── domain/           # Round, Bet, CrashPoint entities
+│   │       ├── application/      # RoundLifecycleService + use cases
+│   │       ├── infrastructure/  # TypeORM entities, repositories, migrations
+│   │       └── presentation/    # REST controllers, WebSocket gateway
 │   └── wallets/
-├── frontend/
-└── docker/
+│       └── src/
+│           ├── domain/           # Wallet, Money value objects
+│           ├── application/      # Use cases, DTOs
+│           ├── infrastructure/  # TypeORM entities, repositories
+│           └── presentation/    # REST controllers
+├── docker/
+└── docker-compose.yml
 ```
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ```bash
 bun install
 bun run docker:up
 ```
-*This command boots up the entire stack automatically (databases, services, gateway, auth, and messaging).*
+
+This command boots up the entire stack automatically (databases, services, gateway, auth, and messaging).
 
 ---
 
-## 📌 Architecture Notes
+## Architecture Notes
 
-* Independent and fully decoupled microservices.
-* Event-driven asynchronous communication.
-* Eventual consistency strictly applied to the financial workflow.
-* Frontend consumes the unified API through the gateway + stable WebSocket connection.
+- Independent and fully decoupled microservices
+- Event-driven asynchronous communication
+- Eventual consistency strictly applied to the financial workflow
+- Explicit state machine in Round aggregate for game logic
+- Frontend consumes the unified API through the gateway + stable WebSocket connection
