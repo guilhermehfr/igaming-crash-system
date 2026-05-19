@@ -25,7 +25,7 @@ import { RabbitMQPublisherService } from './infrastructure/rabbitmq/rabbitmq-pub
       entities: [RoundTypeormEntity, BetTypeormEntity],
       migrations: ['dist/infrastructure/typeorm/migrations/*.js'],
       migrationsRun: true,
-      synchronize: true,
+      synchronize: false,
     }),
     TypeOrmModule.forFeature([RoundTypeormEntity, BetTypeormEntity]),
   ],
