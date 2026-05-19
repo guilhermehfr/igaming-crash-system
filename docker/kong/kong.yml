@@ -1,5 +1,31 @@
 _format_version: "3.0"
 
+plugins:
+  - name: oidc
+    config:
+      discovery: http://keycloak:8080/realms/crash-game/.well-known/openid-configuration
+      client_id: crash-game-client
+      bearer_only: "yes"
+      scope: "openid"
+      ssl_verify: "no"
+      discovery_cache_expires_in: 10
+      timeout: 3000
+  - name: post-function
+    config:
+      access:
+        - |
+          local cjson = require "cjson"
+          local userinfo = kong.request.get_header("X-Userinfo")
+          if userinfo then
+            local decoded = ngx.decode_base64(userinfo)
+            local payload = decoded or userinfo
+            local ok, json = pcall(cjson.decode, payload)
+            if ok and json and json.sub then
+              kong.service.request.set_header("X-User-Id", json.sub)
+            end
+          end
+          kong.service.request.clear_header("X-Userinfo")
+
 services:
   - name: games-service
     url: http://games:4001
