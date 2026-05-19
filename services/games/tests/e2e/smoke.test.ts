@@ -79,8 +79,8 @@ describe('E2E Smoke Test - Distributed System Integration', () => {
     // Step 1: Create wallet with initial balance
     const createWalletRes = await request(`${WALLETS_URL}/wallets`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, initialBalanceInMainUnit: INITIAL_BALANCE }),
+      headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
+      body: JSON.stringify({ initialBalanceInMainUnit: INITIAL_BALANCE }),
     });
     expect(createWalletRes.status).toBeGreaterThanOrEqual(200);
     expect(createWalletRes.status).toBeLessThan(300);
@@ -99,8 +99,8 @@ describe('E2E Smoke Test - Distributed System Integration', () => {
     // Step 3: Place bet
     const placeBetRes = await request(`${GAMES_URL}/games/bets`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, amountInMainUnit: BET_AMOUNT }),
+      headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
+      body: JSON.stringify({ amountInMainUnit: BET_AMOUNT }),
     });
     expect(placeBetRes.status).toBe(201);
     const betId = placeBetRes.data.id;
@@ -142,7 +142,7 @@ describe('E2E Smoke Test - Distributed System Integration', () => {
     console.log(`[Win] Polling for debit: expected balance = ${debitedBalance}`);
     
     const walletAfterDebit = await pollUntil(
-      () => request(`${WALLETS_URL}/wallets/${userId}`),
+      () => request(`${WALLETS_URL}/wallets/${userId}`, { headers: { 'X-User-Id': userId } }),
       (res) => res.data?.balanceInMainUnit === debitedBalance,
       15000
     );
@@ -154,7 +154,7 @@ describe('E2E Smoke Test - Distributed System Integration', () => {
     console.log(`[Win] Polling for credit: expected balance = ${finalBalance}`);
 
     const walletAfterCredit = await pollUntil(
-      () => request(`${WALLETS_URL}/wallets/${userId}`),
+      () => request(`${WALLETS_URL}/wallets/${userId}`, { headers: { 'X-User-Id': userId } }),
       (res) => res.data?.balanceInMainUnit === finalBalance,
       15000
     );
@@ -184,8 +184,8 @@ describe('E2E Smoke Test - Distributed System Integration', () => {
     // Step 1: Create wallet with initial balance
     const createWalletRes = await request(`${WALLETS_URL}/wallets`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, initialBalanceInMainUnit: INITIAL_BALANCE }),
+      headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
+      body: JSON.stringify({ initialBalanceInMainUnit: INITIAL_BALANCE }),
     });
     expect(createWalletRes.status).toBeGreaterThanOrEqual(200);
     expect(createWalletRes.status).toBeLessThan(300);
@@ -205,8 +205,8 @@ describe('E2E Smoke Test - Distributed System Integration', () => {
     // Step 3: Place bet
     const placeBetRes = await request(`${GAMES_URL}/games/bets`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, amountInMainUnit: BET_AMOUNT }),
+      headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
+      body: JSON.stringify({ amountInMainUnit: BET_AMOUNT }),
     });
     expect(placeBetRes.status).toBe(201);
     const betId = placeBetRes.data.id;
@@ -228,7 +228,7 @@ describe('E2E Smoke Test - Distributed System Integration', () => {
     console.log(`[Loss] Polling for debit: expected balance = ${debitedBalance}`);
     
     const walletAfterDebit = await pollUntil(
-      () => request(`${WALLETS_URL}/wallets/${userId}`),
+      () => request(`${WALLETS_URL}/wallets/${userId}`, { headers: { 'X-User-Id': userId } }),
       (res) => res.data?.balanceInMainUnit === debitedBalance,
       15000
     );
