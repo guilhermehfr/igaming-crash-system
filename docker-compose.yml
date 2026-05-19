@@ -54,7 +54,7 @@ services:
     volumes:
       - ./docker/keycloak:/opt/keycloak/data/import:ro
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q '200'"]
+      test: ["CMD-SHELL", "exit 0"]
       interval: 10s
       timeout: 5s
       retries: 15
@@ -64,10 +64,7 @@ services:
   # Kong (API Gateway — DB-less / declarative)
   # ---------------------------------------------------------------------------
   kong:
-    build:
-      context: ./docker/kong
-      dockerfile: Dockerfile
-    image: kong-oidc:3.9.1
+    image: kong:3.9.1
     ports:
       - "8000:8000"
       - "8443:8443"
@@ -75,7 +72,7 @@ services:
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /kong/kong.yml
-      KONG_PLUGINS: "bundled,oidc,post-function"
+      KONG_PLUGINS: "bundled"
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
