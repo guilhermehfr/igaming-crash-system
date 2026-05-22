@@ -49,6 +49,7 @@ The system is split into two main services:
 * Keycloak with OIDC protocol.
 * JWT Token validation handled directly at the gateway (Kong).
 * Access control per authenticated user.
+* Health checks are not exposed via Kong; use service ports directly.
 
 ---
 
@@ -90,6 +91,7 @@ Event → Process → Success → ACK
 ## 📡 API (Gateway)
 
 All routes are exposed centrally through Kong.
+Health endpoints are accessed directly from service ports.
 
 ### Wallet
 * `POST /wallets`
