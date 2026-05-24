@@ -12,6 +12,8 @@ import { GetBetUseCase } from './application/use-cases/get-bet.use-case'
 import { GamesController } from './presentation/controllers/games.controller'
 import { GamesGateway } from './presentation/gateway/games.gateway'
 import { RabbitMQPublisherService } from './infrastructure/rabbitmq/rabbitmq-publisher.service'
+import { ProvablyFairCrashPointGenerator, FixedCrashPointGenerator } from './application/services/crash-point-generator'
+import type { CrashPointGenerator } from './application/services/crash-point-generator'
 
 @Module({
   imports: [
@@ -33,6 +35,19 @@ import { RabbitMQPublisherService } from './infrastructure/rabbitmq/rabbitmq-pub
     {
       provide: 'IRoundRepository',
       useClass: RoundRepository,
+    },
+    {
+      provide: 'CrashPointGenerator',
+      useFactory: (): CrashPointGenerator => {
+        const override = process.env.CRASH_POINT_OVERRIDE;
+        if (override !== undefined) {
+          const fixed = parseFloat(override);
+          if (!Number.isNaN(fixed) && fixed >= 1.0) {
+            return new FixedCrashPointGenerator(fixed);
+          }
+        }
+        return new ProvablyFairCrashPointGenerator();
+      },
     },
     GamesGateway,
     RabbitMQPublisherService,

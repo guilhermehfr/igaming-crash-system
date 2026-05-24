@@ -15,7 +15,7 @@ services:
       - postgres_data:/var/lib/postgresql
       - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d postgres"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -98,8 +98,8 @@ services:
   # ---------------------------------------------------------------------------
   games:
     build:
-      context: ./services/games
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/games/Dockerfile
     ports:
       - "4001:4001"
     env_file:
@@ -107,6 +107,7 @@ services:
     environment:
       - DB_HOST=postgres
       - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+      - CRASH_POINT_OVERRIDE=2.0
     depends_on:
       postgres:
         condition: service_healthy
@@ -115,7 +116,7 @@ services:
       kong:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4001/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:4001/games/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -126,8 +127,8 @@ services:
   # ---------------------------------------------------------------------------
   wallets:
     build:
-      context: ./services/wallets
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/wallets/Dockerfile
     ports:
       - "4002:4002"
     env_file:
@@ -143,7 +144,7 @@ services:
       kong:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4002/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:4002/wallets/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10

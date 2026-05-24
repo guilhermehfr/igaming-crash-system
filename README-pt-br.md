@@ -1,6 +1,6 @@
-# Igaming Crash System
+# 🎲 Igaming Crash System
 
-Sistema de jogo multiplayer em tempo real no modelo *crash game*. Jogadores realizam apuestas antes de cada rodada e precisam sacar antes do multiplicador colapsar.
+Sistema de jogo multiplayer em tempo real no modelo *crash game*. Jogadores realizam apostas antes de cada rodada e precisam sacar antes do multiplicador colapsar.
 
 ## Stack
 

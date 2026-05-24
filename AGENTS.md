@@ -393,6 +393,9 @@ psql -h localhost -U admin -d wallets -W
 curl http://localhost:4001/games/health   # Games service
 curl http://localhost:4002/wallets/health   # Wallets service
 
+# Gateway auth check (401 without token)
+curl -i http://localhost:8000/games/current
+
 # Kong admin API
 curl http://localhost:8001/services # List all Kong services
 

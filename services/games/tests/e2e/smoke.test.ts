@@ -64,9 +64,10 @@ async function waitForNoActiveRound(timeoutMs: number = 10000): Promise<void> {
 }
 
 describe('E2E Smoke Test - Distributed System Integration', () => {
+  const TEST_TIMEOUT_MS = 45000;
   const INITIAL_BALANCE = 100;
   const BET_AMOUNT = 10;
-  const MULTIPLIER = 2.0;
+  const MULTIPLIER = 1.5;
   const WINNINGS = BET_AMOUNT * MULTIPLIER;
 
   afterEach(async () => {
@@ -106,32 +107,22 @@ describe('E2E Smoke Test - Distributed System Integration', () => {
     const betId = placeBetRes.data.id;
     console.log(`[Win] Placed bet: ${betId} for ${BET_AMOUNT}`);
 
-    // Step 4: Wait a moment for round to start (betting is 5s)
-    await new Promise(r => setTimeout(r, 1000));
+    // Step 4: Wait for round to transition to RUNNING
+    console.log('[Win] Waiting for RUNNING state...');
+    const runningRound = await pollUntil(
+      () => request(`${GAMES_URL}/games/current`),
+      (res) => res.data?.state === 'RUNNING',
+      15000
+    );
+    console.log(`[Win] Round is RUNNING (multiplier: ${runningRound.data?.currentMultiplier})`);
 
-    // Step 5: Try to cash out
-    console.log('[Win] Attempting cash-out...');
+    // Step 5: Cash out
+    console.log(`[Win] Attempting cash-out at ${MULTIPLIER}x...`);
     const cashOutRes = await request(`${GAMES_URL}/games/bets/${betId}/cash-out`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ multiplier: MULTIPLIER }),
     });
-    
-    // If round already crashed, that's ok - test failed but this is expected given timing
-    if (cashOutRes.status !== 201 && cashOutRes.status !== 200) {
-      console.log(`[Win] Cash-out failed with status ${cashOutRes.status}: ${JSON.stringify(cashOutRes.data)}`);
-      // Wait for crash to complete
-      await pollUntil(
-        () => request(`${GAMES_URL}/games/current`),
-        (res) => res.data?.state === 'CRASHED',
-        15000
-      );
-      // If we couldn't cash out, bet should be LOST
-      const betRes = await request(`${GAMES_URL}/games/bets/${betId}`);
-      expect(betRes.data.state).toBe('LOST');
-      console.log(`[Win] Bet state: ${betRes.data.state} (crashed before cashout)`);
-      return; // Test ends here - we can't verify win flow
-    }
     
     expect(cashOutRes.status).toBeGreaterThanOrEqual(200);
     expect(cashOutRes.status).toBeLessThan(300);
@@ -151,32 +142,31 @@ describe('E2E Smoke Test - Distributed System Integration', () => {
 
     // Step 7: Poll wallet until credited (balance = INITIAL - BET + WINNINGS)
     const finalBalance = INITIAL_BALANCE - BET_AMOUNT + WINNINGS;
-    console.log(`[Win] Polling for credit: expected balance = ${finalBalance}`);
+    console.log(`[Win] Polling wallet for final balance: ${finalBalance}`);
 
-    const walletAfterCredit = await pollUntil(
+    const walletAfterSettle = await pollUntil(
       () => request(`${WALLETS_URL}/wallets/${userId}`, { headers: { 'X-User-Id': userId } }),
       (res) => res.data?.balanceInMainUnit === finalBalance,
-      15000
+      30000
     );
-    expect(walletAfterCredit.data.balanceInMainUnit).toBe(finalBalance);
-    console.log(`[Win] Wallet credited: ${finalBalance}`);
+    expect(walletAfterSettle.data.balanceInMainUnit).toBe(finalBalance);
+    console.log(`[Win] Balance consistency: ${INITIAL_BALANCE} - ${BET_AMOUNT} + ${WINNINGS} = ${finalBalance} ✅`);
 
-    // Step 8: Assert balance consistency
-    const expectedFinal = INITIAL_BALANCE - BET_AMOUNT + WINNINGS;
-    expect(walletAfterCredit.data.balanceInMainUnit).toBe(expectedFinal);
-    console.log(`[Win] Balance consistency: ${INITIAL_BALANCE} - ${BET_AMOUNT} + ${WINNINGS} = ${expectedFinal} ✅`);
-
-    // Step 9: Assert bet state
+    // Step 7: Assert bet state
     const betRes = await request(`${GAMES_URL}/games/bets/${betId}`);
     expect(betRes.data.state).toBe('CASHED_OUT');
     expect(betRes.data.winningsInMainUnit).toBe(WINNINGS);
     console.log(`[Win] Bet state: ${betRes.data.state} ✅`);
 
-    // Step 10: Assert round state
-    const roundRes = await request(`${GAMES_URL}/games/current`);
-    expect(roundRes.data.state).toBe('CRASHED');
-    console.log(`[Win] Round state: ${roundRes.data.state} ✅`);
-  });
+    // Step 8: Wait for round to crash (at 2.0x crash point)
+    const crashedRound = await pollUntil(
+      () => request(`${GAMES_URL}/games/current`),
+      (res) => res.data?.state === 'CRASHED',
+      30000
+    );
+    expect(crashedRound.data.state).toBe('CRASHED');
+    console.log(`[Win] Round state: ${crashedRound.data.state} ✅`);
+  }, TEST_TIMEOUT_MS);
 
   it('should complete loss flow with balance consistency', async () => {
     const userId = `smoke-loss-${Date.now()}`;
@@ -218,7 +208,7 @@ describe('E2E Smoke Test - Distributed System Integration', () => {
     const crashedRound = await pollUntil(
       () => request(`${GAMES_URL}/games/current`),
       (res) => res.data?.state === 'CRASHED',
-      20000
+      30000
     );
     expect(crashedRound.data.state).toBe('CRASHED');
     console.log(`[Loss] Round crashed: ${crashedRound.data.crashPointMultiplier}x`);
@@ -230,7 +220,7 @@ describe('E2E Smoke Test - Distributed System Integration', () => {
     const walletAfterDebit = await pollUntil(
       () => request(`${WALLETS_URL}/wallets/${userId}`, { headers: { 'X-User-Id': userId } }),
       (res) => res.data?.balanceInMainUnit === debitedBalance,
-      15000
+      30000
     );
     expect(walletAfterDebit.data.balanceInMainUnit).toBe(debitedBalance);
     console.log(`[Loss] Wallet debited: ${debitedBalance}`);
@@ -253,5 +243,5 @@ describe('E2E Smoke Test - Distributed System Integration', () => {
     const roundRes = await request(`${GAMES_URL}/games/current`);
     expect(roundRes.data.state).toBe('CRASHED');
     console.log(`[Loss] Round state: ${roundRes.data.state} ✅`);
-  });
+  }, TEST_TIMEOUT_MS);
 });

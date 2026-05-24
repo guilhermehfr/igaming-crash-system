@@ -126,7 +126,7 @@ describe('Round Entity', () => {
       round.setCrashPoint(crashPoint);
       round.startRound();
 
-      expect(() => round.cashOut('non-existent', 2.0)).toThrow('not found in this round');
+      expect(() => round.cashOut('non-existent', 2.0)).toThrow('Bet not found');
     });
 
     it('should auto-liquidate pending bets on crash', () => {

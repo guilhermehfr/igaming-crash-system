@@ -92,6 +92,7 @@ Precision via BigInt (centavos = 1/100 of main unit, no floating-point errors).
 - Access control per authenticated user
 - Test user: `player` / `player123`
 - Realm: `crash-game`, Client: `crash-game-client`
+- Health checks are not exposed via Kong; use service ports directly
 
 ---
 
@@ -130,6 +131,7 @@ WebSockets for round synchronization (Games service on port 4001).
 ## API (Gateway)
 
 All routes exposed through Kong (port 8000).
+Health endpoints are accessed directly from service ports.
 
 ### Wallet Endpoints
 

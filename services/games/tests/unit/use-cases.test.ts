@@ -18,6 +18,10 @@ class MockRoundLifecycleService {
     return this.currentRound;
   }
 
+  async initializeNewRound() {
+    this.currentRound = Round.create(`round-${Date.now()}`);
+  }
+
   async placeBet(bet: any) {
     if (!this.currentRound) throw new Error('No active round');
     this.currentRound.placeBet(bet);
@@ -121,12 +125,11 @@ describe('PlaceBetUseCase', () => {
       ).rejects.toThrow('User ID must be non-empty');
     });
 
-    it('should throw with zero amount', async () => {
+    it('should allow zero amount (watch-only)', async () => {
       mockService.currentRound = Round.create('round-1');
       
-      await expect(
-        useCase.execute({ userId: 'user-1', amountInMainUnit: 0 })
-      ).rejects.toThrow('Bet amount must be greater than zero');
+      const result = await useCase.execute({ userId: 'user-1', amountInMainUnit: 0 });
+      expect(result).toBeDefined();
     });
 
     it('should throw with negative amount', async () => {
@@ -134,13 +137,13 @@ describe('PlaceBetUseCase', () => {
       
       await expect(
         useCase.execute({ userId: 'user-1', amountInMainUnit: -5 })
-      ).rejects.toThrow('Bet amount must be greater than zero');
+      ).rejects.toThrow('Bet amount must be zero or greater');
     });
 
-    it('should throw when no active round', async () => {
-      await expect(
-        useCase.execute({ userId: 'user-1', amountInMainUnit: 10 })
-      ).rejects.toThrow('No active round');
+    it('should create round when no active round exists', async () => {
+      const result = await useCase.execute({ userId: 'user-1', amountInMainUnit: 10 });
+      expect(result).toBeDefined();
+      expect(mockService.currentRound).not.toBeNull();
     });
 
     it('should convert amount to centavos', async () => {
