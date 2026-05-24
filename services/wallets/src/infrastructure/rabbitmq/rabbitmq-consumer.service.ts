@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import * as amqp from 'amqplib'
-import type { IBetPlacedEvent, IBetCashedOutEvent, IBetLostEvent } from '../../../../packages/events'
+import type { IBetPlacedEvent, IBetCashedOutEvent, IBetLostEvent } from '@crash/events'
 import { DebitWalletUseCase } from '../../application/use-cases/debit-wallet.use-case'
 import { CreditWalletUseCase } from '../../application/use-cases/credit-wallet.use-case'
 import type { IConsumedEventRepository } from '../../domain/consumed-event.repository'
@@ -20,7 +20,7 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
 @Injectable()
 export class RabbitMQConsumerService implements OnModuleDestroy, OnModuleInit {
   private readonly logger = new Logger(RabbitMQConsumerService.name)
-  private connection: amqp.Connection | null = null
+  private connection: amqp.ChannelModel | null = null
   private channel: amqp.Channel | null = null
 
   constructor(
@@ -59,17 +59,22 @@ export class RabbitMQConsumerService implements OnModuleDestroy, OnModuleInit {
       this.channel = await withTimeout(this.connection.createChannel(), 5000, 'createChannel')
       this.logger.log('[RABBITMQ] ✓ Channel created')
 
+      const channel = this.channel
+      if (!channel) {
+        throw new Error('[RABBITMQ] Channel not initialized')
+      }
+
       // Channel lifecycle events
-      this.channel.on('error', (err) => {
+      channel.on('error', (err) => {
         this.logger.error(`[RABBITMQ] Channel ERROR: ${err.message}`)
       })
-      this.channel.on('close', () => {
+      channel.on('close', () => {
         this.logger.warn('[RABBITMQ] Channel CLOSED')
       })
 
       // Step 3: Setup DLX exchange
       this.logger.log('[RABBITMQ] → Setting up DLX exchange...')
-      await this.channel.assertExchange('dlx', 'direct', { durable: true })
+      await channel.assertExchange('dlx', 'direct', { durable: true })
       this.logger.log('[RABBITMQ] ✓ DLX exchange "dlx" created')
 
       // Step 4: Setup DLQ queues with assertion and binding
@@ -78,11 +83,11 @@ export class RabbitMQConsumerService implements OnModuleDestroy, OnModuleInit {
 
       for (const dlqName of dlqQueues) {
         this.logger.log(`[RABBITMQ] → Creating DLQ: ${dlqName}`)
-        await this.channel.assertQueue(dlqName, { durable: true, arguments: { 'x-message-ttl': dlqTTL }})
+        await channel.assertQueue(dlqName, { durable: true, arguments: { 'x-message-ttl': dlqTTL }})
         this.logger.log(`[RABBITMQ] ✓ DLQ asserted: ${dlqName}`)
         
         const routingKey = dlqName
-        await this.channel.bindQueue(dlqName, 'dlx', routingKey)
+        await channel.bindQueue(dlqName, 'dlx', routingKey)
         this.logger.log(`[RABBITMQ] ✓ DLQ bound to dlx with routingKey: ${routingKey}`)
       }
 
@@ -95,7 +100,7 @@ export class RabbitMQConsumerService implements OnModuleDestroy, OnModuleInit {
 
       for (const queue of mainQueues) {
         this.logger.log(`[RABBITMQ] → Asserting main queue: ${queue.name}`)
-        await this.channel.assertQueue(queue.name, {
+        await channel.assertQueue(queue.name, {
           durable: true,
           deadLetterExchange: 'dlx',
           deadLetterRoutingKey: queue.dlq
@@ -107,17 +112,17 @@ export class RabbitMQConsumerService implements OnModuleDestroy, OnModuleInit {
       const consumerResults = []
 
       this.logger.log('[RABBITMQ] → Registering consumer on: games.bet.placed')
-      const result1 = await this.channel.consume('games.bet.placed', (msg) => this.handleMessage(msg, 'games.bet.placed', this.handleBetPlaced.bind(this)))
+      const result1 = await channel.consume('games.bet.placed', (msg) => this.handleMessage(msg, 'games.bet.placed', this.handleBetPlaced.bind(this)))
       this.logger.log(`[RABBITMQ] ✓ Consumer registered on games.bet.placed - tag: ${result1.consumerTag}`)
       consumerResults.push({ queue: 'games.bet.placed', tag: result1.consumerTag })
 
       this.logger.log('[RABBITMQ] → Registering consumer on: games.bet.cashed-out')
-      const result2 = await this.channel.consume('games.bet.cashed-out', (msg) => this.handleMessage(msg, 'games.bet.cashed-out', this.handleBetCashedOut.bind(this)))
+      const result2 = await channel.consume('games.bet.cashed-out', (msg) => this.handleMessage(msg, 'games.bet.cashed-out', this.handleBetCashedOut.bind(this)))
       this.logger.log(`[RABBITMQ] ✓ Consumer registered on games.bet.cashed-out - tag: ${result2.consumerTag}`)
       consumerResults.push({ queue: 'games.bet.cashed-out', tag: result2.consumerTag })
 
       this.logger.log('[RABBITMQ] → Registering consumer on: games.bet.lost')
-      const result3 = await this.channel.consume('games.bet.lost', (msg) => this.handleMessage(msg, 'games.bet.lost', this.handleBetLost.bind(this)))
+      const result3 = await channel.consume('games.bet.lost', (msg) => this.handleMessage(msg, 'games.bet.lost', this.handleBetLost.bind(this)))
       this.logger.log(`[RABBITMQ] ✓ Consumer registered on games.bet.lost - tag: ${result3.consumerTag}`)
       consumerResults.push({ queue: 'games.bet.lost', tag: result3.consumerTag })
 

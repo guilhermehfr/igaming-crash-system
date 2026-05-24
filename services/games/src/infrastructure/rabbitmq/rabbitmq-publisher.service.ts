@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common'
 import * as amqp from 'amqplib'
-import type { IBetPlacedEvent, IBetCashedOutEvent, IBetLostEvent } from '../../../../packages/events'
+import type { IBetPlacedEvent, IBetCashedOutEvent, IBetLostEvent } from '@crash/events'
 
 @Injectable()
 export class RabbitMQPublisherService {
   private readonly logger = new Logger(RabbitMQPublisherService.name)
-  private connection: amqp.Connection | null = null
+  private connection: amqp.ChannelModel | null = null
   private channel: amqp.Channel | null = null
 
   private async getChannel(): Promise<amqp.Channel> {

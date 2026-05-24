@@ -7,14 +7,15 @@ export class ConsumedEventRepository implements IConsumedEventRepository {
   constructor(private readonly dataSource: DataSource) {}
 
   async tryClaimEvent(eventId: string, eventType: EventType, userId: string): Promise<boolean> {
-    const result = await this.dataSource.query(
-      `INSERT INTO consumed_events ("eventId", "eventType", "userId", "processedAt")
-       VALUES ($1, $2, $3, NOW())
-       ON CONFLICT ("eventId") DO NOTHING`,
-      [eventId, eventType, userId]
-    );
-
-    const rowCount = (result as any)?.rowCount ?? 0;
-    return rowCount === 1;
+    try {
+      await this.dataSource.query(
+        `INSERT INTO consumed_events ("event_id", "event_type", "user_id", "processed_at")
+         VALUES ($1, $2, $3, NOW())`,
+        [eventId, eventType, userId]
+      );
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

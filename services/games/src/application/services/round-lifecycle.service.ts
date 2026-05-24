@@ -6,7 +6,8 @@ import { CrashPoint } from '../../domain/crash-point.vo';
 import type { IRoundRepository } from '../../domain/round.repository';
 import { GamesGateway } from '../../presentation/gateway/games.gateway';
 import { RabbitMQPublisherService } from '../../infrastructure/rabbitmq/rabbitmq-publisher.service';
-import type { IBetPlacedEvent, IBetCashedOutEvent, IBetLostEvent } from '../../../../packages/events';
+import type { IBetPlacedEvent, IBetCashedOutEvent, IBetLostEvent } from '@crash/events';
+import type { CrashPointGenerator } from './crash-point-generator';
 
 @Injectable()
 export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
@@ -27,6 +28,8 @@ private readonly BETTING_PHASE_DURATION_MS = 5000;
     private readonly roundRepository: IRoundRepository,
     private readonly gamesGateway: GamesGateway,
     private readonly rabbitmqPublisher: RabbitMQPublisherService,
+    @Inject('CrashPointGenerator')
+    private readonly crashPointGenerator: CrashPointGenerator,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -70,7 +73,7 @@ private readonly BETTING_PHASE_DURATION_MS = 5000;
     try {
       const seed = `${Date.now()}-${Math.random().toString(36).substr(2, 16)}`;
       const hash = createHmac('sha256', seed).digest('hex');
-      const crashPointMultiplier = this.generateCrashPoint(seed);
+      const crashPointMultiplier = this.crashPointGenerator.generate(hash);
 
       const crashPoint = CrashPoint.create(crashPointMultiplier, hash, seed);
 
@@ -287,16 +290,6 @@ private readonly BETTING_PHASE_DURATION_MS = 5000;
 
   async getRoundHistory(page: number, limit: number): Promise<Round[]> {
     return this.roundRepository.findAll(page, limit);
-  }
-
-  private generateCrashPoint(seed: string): number {
-    const hash = createHmac('sha256', seed).digest('hex');
-    const h = parseInt(hash.slice(0, 8), 16);
-    const e = 2 ** 32;
-
-    if (h % 100 === 0) return 1.0;
-
-    return Math.floor((100 * e - h) / (e - h)) / 100;
   }
 
   onModuleDestroy(): void {
