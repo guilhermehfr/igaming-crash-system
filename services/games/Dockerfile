@@ -1,11 +1,14 @@
 FROM oven/bun:1-alpine
 
+RUN apk add --no-cache curl
+
 WORKDIR /app
 
-COPY package.json ./
+COPY . .
 RUN bun install
 
-COPY . .
+WORKDIR /app/services/games
+RUN bun x tsc
 
 EXPOSE 4001
 
