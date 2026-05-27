@@ -1,7 +1,4 @@
 services:
-  # ---------------------------------------------------------------------------
-  # PostgreSQL 18
-  # ---------------------------------------------------------------------------
   postgres:
     image: postgres:18.3-alpine
     ports:
@@ -20,9 +17,6 @@ services:
       timeout: 5s
       retries: 10
 
-  # ---------------------------------------------------------------------------
-  # RabbitMQ (with management UI)
-  # ---------------------------------------------------------------------------
   rabbitmq:
     image: rabbitmq:4.2.4-management-alpine
     ports:
@@ -39,9 +33,6 @@ services:
       timeout: 5s
       retries: 10
 
-  # ---------------------------------------------------------------------------
-  # Keycloak (Identity Provider)
-  # ---------------------------------------------------------------------------
   keycloak:
     image: quay.io/keycloak/keycloak:26.5.5
     command: start-dev --import-realm
@@ -54,15 +45,12 @@ services:
     volumes:
       - ./docker/keycloak:/opt/keycloak/data/import:ro
     healthcheck:
-      test: ["CMD-SHELL", "exit 0"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/health/ready || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 15
       start_period: 30s
 
-  # ---------------------------------------------------------------------------
-  # Kong (API Gateway — DB-less / declarative)
-  # ---------------------------------------------------------------------------
   kong:
     image: kong:3.9.1
     ports:
@@ -90,12 +78,7 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      keycloak:
-        condition: service_healthy
 
-  # ---------------------------------------------------------------------------
-  # Games Service
-  # ---------------------------------------------------------------------------
   games:
     build:
       context: .
@@ -107,7 +90,6 @@ services:
     environment:
       - DB_HOST=postgres
       - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
-      - CRASH_POINT_OVERRIDE=2.0
     depends_on:
       postgres:
         condition: service_healthy
@@ -122,9 +104,6 @@ services:
       retries: 10
       start_period: 15s
 
-  # ---------------------------------------------------------------------------
-  # Wallets Service
-  # ---------------------------------------------------------------------------
   wallets:
     build:
       context: .
@@ -149,18 +128,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 15s
-
-  # ---------------------------------------------------------------------------
-  # Frontend (placeholder — candidate implements)
-  # ---------------------------------------------------------------------------
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - kong
 
 volumes:
   postgres_data:
