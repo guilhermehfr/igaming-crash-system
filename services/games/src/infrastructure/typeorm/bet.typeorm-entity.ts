@@ -1,12 +1,12 @@
 import {
-	Entity,
-	PrimaryColumn,
 	Column,
 	CreateDateColumn,
-	UpdateDateColumn,
-	ManyToOne,
+	Entity,
 	JoinColumn,
+	ManyToOne,
+	PrimaryColumn,
 	type Relation,
+	UpdateDateColumn,
 } from "typeorm";
 import { BetState } from "../../domain/bet.entity";
 import { BigIntTransformer } from "./transformers/bigint.transformer";

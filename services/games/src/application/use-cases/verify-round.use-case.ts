@@ -1,4 +1,5 @@
-import { Injectable, Inject, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import { config } from "../../config/configuration";
 import type { IRoundRepository } from "../../domain/round.repository";
 @Injectable()
 export class VerifyRoundUseCase {
@@ -28,8 +29,7 @@ export class VerifyRoundUseCase {
 			throw new Error(`Round ${roundId} has no crash point`);
 		}
 
-		const serverSecret =
-			process.env.CRASH_SERVER_SECRET || "dev-secret-key-change-in-prod";
+		const serverSecret = config.crash.serverSecret;
 
 		const isValid = crashPoint.verifyProvablyFair(serverSecret);
 

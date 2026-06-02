@@ -1,11 +1,11 @@
+import { Logger } from "@nestjs/common";
 import {
-	WebSocketGateway,
-	WebSocketServer,
 	type OnGatewayConnection,
 	type OnGatewayDisconnect,
+	WebSocketGateway,
+	WebSocketServer,
 } from "@nestjs/websockets";
 import type { Server, Socket } from "socket.io";
-import { Logger } from "@nestjs/common";
 
 @WebSocketGateway({
 	cors: {

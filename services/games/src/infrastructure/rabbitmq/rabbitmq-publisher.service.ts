@@ -1,10 +1,12 @@
-import { Injectable, Logger } from "@nestjs/common";
-import * as amqp from "amqplib";
 import type {
-	IBetPlacedEvent,
 	IBetCashedOutEvent,
 	IBetLostEvent,
+	IBetPlacedEvent,
 } from "@crash/events";
+import { Injectable, Logger } from "@nestjs/common";
+import * as amqp from "amqplib";
+
+import { config } from "../../config/configuration";
 
 @Injectable()
 export class RabbitMQPublisherService {
@@ -14,8 +16,7 @@ export class RabbitMQPublisherService {
 
 	private async getChannel(): Promise<amqp.Channel> {
 		if (!this.connection || !this.channel) {
-			const rabbitUrl =
-				process.env.RABBITMQ_URL ?? "amqp://admin:admin@localhost:5672";
+			const rabbitUrl = config.rabbitmq.url;
 			this.connection = await amqp.connect(rabbitUrl);
 			this.channel = await this.connection.createChannel();
 			this.logger.log(

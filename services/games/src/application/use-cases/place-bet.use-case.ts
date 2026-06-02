@@ -1,8 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Bet } from "../../domain/bet.entity";
-import type { RoundLifecycleService } from "../services/round-lifecycle.service";
-import type { PlaceBetDto } from "../dtos/place-bet.dto";
 import { BetResponseDto } from "../dtos/bet-response.dto";
+import type { PlaceBetDto } from "../dtos/place-bet.dto";
+import { RoundLifecycleService } from "../services/round-lifecycle.service";
 @Injectable()
 export class PlaceBetUseCase {
 	private readonly logger = new Logger(PlaceBetUseCase.name);

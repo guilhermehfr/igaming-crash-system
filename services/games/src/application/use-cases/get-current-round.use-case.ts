@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
-import type { RoundLifecycleService } from "../services/round-lifecycle.service";
 import { RoundResponseDto } from "../dtos/round-response.dto";
+import { RoundLifecycleService } from "../services/round-lifecycle.service";
 @Injectable()
 export class GetCurrentRoundUseCase {
 	private readonly logger = new Logger(GetCurrentRoundUseCase.name);

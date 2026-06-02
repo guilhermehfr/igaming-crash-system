@@ -1,22 +1,22 @@
+import { createHmac, randomUUID } from "node:crypto";
+import type {
+	IBetCashedOutEvent,
+	IBetLostEvent,
+	IBetPlacedEvent,
+} from "@crash/events";
 import {
-	Injectable,
 	Inject,
+	Injectable,
 	Logger,
 	type OnModuleDestroy,
 	type OnModuleInit,
 } from "@nestjs/common";
-import { createHmac, randomUUID } from "node:crypto";
-import { Round } from "../../domain/round.entity";
 import type { Bet } from "../../domain/bet.entity";
 import { CrashPoint } from "../../domain/crash-point.vo";
+import { Round } from "../../domain/round.entity";
 import type { IRoundRepository } from "../../domain/round.repository";
-import type { GamesGateway } from "../../presentation/gateway/games.gateway";
-import type { RabbitMQPublisherService } from "../../infrastructure/rabbitmq/rabbitmq-publisher.service";
-import type {
-	IBetPlacedEvent,
-	IBetCashedOutEvent,
-	IBetLostEvent,
-} from "@crash/events";
+import { RabbitMQPublisherService } from "../../infrastructure/rabbitmq/rabbitmq-publisher.service";
+import { GamesGateway } from "../../presentation/gateway/games.gateway";
 import type { CrashPointGenerator } from "./crash-point-generator";
 
 @Injectable()

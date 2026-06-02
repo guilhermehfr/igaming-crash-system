@@ -1,11 +1,11 @@
 import {
-	Entity,
-	PrimaryColumn,
 	Column,
 	CreateDateColumn,
-	UpdateDateColumn,
+	Entity,
 	OneToMany,
+	PrimaryColumn,
 	type Relation,
+	UpdateDateColumn,
 } from "typeorm";
 import { RoundState } from "../../domain/round.entity";
 
