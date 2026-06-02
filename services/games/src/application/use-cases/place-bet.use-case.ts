@@ -1,62 +1,67 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Bet } from '../../domain/bet.entity';
-import { RoundLifecycleService } from '../services/round-lifecycle.service';
-import { PlaceBetDto } from '../dtos/place-bet.dto';
-import { BetResponseDto } from '../dtos/bet-response.dto';
+import { Injectable, Logger } from "@nestjs/common";
+import { Bet } from "../../domain/bet.entity";
+import type { RoundLifecycleService } from "../services/round-lifecycle.service";
+import type { PlaceBetDto } from "../dtos/place-bet.dto";
+import { BetResponseDto } from "../dtos/bet-response.dto";
 @Injectable()
 export class PlaceBetUseCase {
-  private readonly logger = new Logger(PlaceBetUseCase.name);
+	private readonly logger = new Logger(PlaceBetUseCase.name);
 
-  constructor(private readonly roundLifecycleService: RoundLifecycleService) {}
+	constructor(private readonly roundLifecycleService: RoundLifecycleService) {}
 
-  async execute(input: PlaceBetDto): Promise<BetResponseDto> {
-    if (!input.userId || input.userId.trim() === '') {
-      throw new Error('User ID must be non-empty');
-    }
+	async execute(input: PlaceBetDto): Promise<BetResponseDto> {
+		if (!input.userId || input.userId.trim() === "") {
+			throw new Error("User ID must be non-empty");
+		}
 
-    // Allow 0 bet - user watches but doesn't participate in winnings/losses
-    if (input.amountInMainUnit < 0) {
-      throw new Error('Bet amount must be zero or greater');
-    }
+		// Allow 0 bet - user watches but doesn't participate in winnings/losses
+		if (input.amountInMainUnit < 0) {
+			throw new Error("Bet amount must be zero or greater");
+		}
 
-    const isWatchOnly = input.amountInMainUnit === 0;
+		const isWatchOnly = input.amountInMainUnit === 0;
 
-    this.logger.debug(
-      `Placing bet: userId=${input.userId}, amount=${input.amountInMainUnit}${isWatchOnly ? ' (WATCH ONLY)' : ''}`,
-    );
+		this.logger.debug(
+			`Placing bet: userId=${input.userId}, amount=${input.amountInMainUnit}${isWatchOnly ? " (WATCH ONLY)" : ""}`,
+		);
 
-    try {
-      let currentRound = this.roundLifecycleService.getCurrentRound();
-      
-      // If no round exists, create one (first bet triggers the cycle)
-      if (!currentRound) {
-        this.logger.log('No round exists, creating new round...');
-        await this.roundLifecycleService.initializeNewRound();
-        currentRound = this.roundLifecycleService.getCurrentRound();
-      }
+		try {
+			let currentRound = this.roundLifecycleService.getCurrentRound();
 
-      if (!currentRound) {
-        throw new Error('Failed to create round');
-      }
+			// If no round exists, create one (first bet triggers the cycle)
+			if (!currentRound) {
+				this.logger.log("No round exists, creating new round...");
+				await this.roundLifecycleService.initializeNewRound();
+				currentRound = this.roundLifecycleService.getCurrentRound();
+			}
 
-      const betId = `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const betAmountInCentavos = BigInt(Math.round(input.amountInMainUnit * 100));
-      const bet = Bet.create(
-        betId,
-        currentRound.id,
-        input.userId,
-        betAmountInCentavos,
-      );
+			if (!currentRound) {
+				throw new Error("Failed to create round");
+			}
 
-      await this.roundLifecycleService.placeBet(bet);
+			const betId = `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+			const betAmountInCentavos = BigInt(
+				Math.round(input.amountInMainUnit * 100),
+			);
+			const bet = Bet.create(
+				betId,
+				currentRound.id,
+				input.userId,
+				betAmountInCentavos,
+			);
 
-      this.logger.log(`Bet ${betId} placed successfully for user ${input.userId}`);
+			await this.roundLifecycleService.placeBet(bet);
 
-      return BetResponseDto.fromDomain(bet);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Error placing bet: ${errorMessage}`);
-      throw error;
-    }
-  }
+			this.logger.log(
+				`Bet ${betId} placed successfully for user ${input.userId}`,
+			);
+
+			return BetResponseDto.fromDomain(bet);
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			this.logger.error(`Error placing bet: ${errorMessage}`);
+			throw error;
+		}
+	}
 }

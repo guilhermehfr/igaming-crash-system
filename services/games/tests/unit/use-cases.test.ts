@@ -1,233 +1,192 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { PlaceBetUseCase } from '../../src/application/use-cases/place-bet.use-case';
-import { CashOutUseCase } from '../../src/application/use-cases/cash-out.use-case';
-import { GetCurrentRoundUseCase } from '../../src/application/use-cases/get-current-round.use-case';
-import { GetRoundHistoryUseCase } from '../../src/application/use-cases/get-round-history.use-case';
-import { RoundLifecycleService } from '../../src/application/services/round-lifecycle.service';
-import { Round, RoundState } from '../../src/domain/round.entity';
-import type { IRoundRepository } from '../../src/domain/round.repository';
-
+import { describe, it, expect, beforeEach } from "bun:test";
+import { PlaceBetUseCase } from "../../src/application/use-cases/place-bet.use-case";
+import { GetCurrentRoundUseCase } from "../../src/application/use-cases/get-current-round.use-case";
+import { GetRoundHistoryUseCase } from "../../src/application/use-cases/get-round-history.use-case";
+import type { RoundLifecycleService } from "../../src/application/services/round-lifecycle.service";
+import { Round } from "../../src/domain/round.entity";
+import type { Bet } from "../../src/domain/bet.entity";
 // Mock RoundLifecycleService
 class MockRoundLifecycleService {
-  currentRound: Round | null = null;
-  placedBets: any[] = [];
-  cashedOutBets: any[] = [];
-  historyRounds: Round[] = [];
+	currentRound: Round | null = null;
+	placedBets: Bet[] = [];
+	cashedOutBets: { betId: string; multiplier: number }[] = [];
+	historyRounds: Round[] = [];
 
-  getCurrentRound() {
-    return this.currentRound;
-  }
+	getCurrentRound() {
+		return this.currentRound;
+	}
 
-  async initializeNewRound() {
-    this.currentRound = Round.create(`round-${Date.now()}`);
-  }
+	async initializeNewRound() {
+		this.currentRound = Round.create(`round-${Date.now()}`);
+	}
 
-  async placeBet(bet: any) {
-    if (!this.currentRound) throw new Error('No active round');
-    this.currentRound.placeBet(bet);
-    this.placedBets.push(bet);
-  }
+	async placeBet(bet: Bet) {
+		if (!this.currentRound) throw new Error("No active round");
+		this.currentRound.placeBet(bet);
+		this.placedBets.push(bet);
+	}
 
-  async cashOutBet(betId: string, multiplier: number) {
-    if (!this.currentRound) throw new Error('No active round');
-    this.currentRound.cashOut(betId, multiplier);
-    this.cashedOutBets.push({ betId, multiplier });
-  }
+	async cashOutBet(betId: string, multiplier: number) {
+		if (!this.currentRound) throw new Error("No active round");
+		this.currentRound.cashOut(betId, multiplier);
+		this.cashedOutBets.push({ betId, multiplier });
+	}
 
-  async getRoundHistory(page: number, limit: number): Promise<Round[]> {
-    return this.historyRounds.slice((page - 1) * limit, page * limit);
-  }
+	async getRoundHistory(page: number, limit: number): Promise<Round[]> {
+		return this.historyRounds.slice((page - 1) * limit, page * limit);
+	}
 }
 
-// Mock IRoundRepository
-class MockRoundRepository implements IRoundRepository {
-  rounds: Round[] = [];
+describe("PlaceBetUseCase", () => {
+	let mockService: MockRoundLifecycleService;
+	let useCase: PlaceBetUseCase;
 
-  async save(round: Round): Promise<void> {
-    this.rounds.push(round);
-  }
+	beforeEach(() => {
+		mockService = new MockRoundLifecycleService();
+		useCase = new PlaceBetUseCase(
+			mockService as unknown as RoundLifecycleService,
+		);
+	});
 
-  async findById(id: string): Promise<Round | null> {
-    return this.rounds.find(r => r.id === id) || null;
-  }
+	describe("execute", () => {
+		it("should place bet with valid input", async () => {
+			mockService.currentRound = Round.create("round-1");
 
-  async findMostRecent(): Promise<Round | null> {
-    return this.rounds[this.rounds.length - 1] || null;
-  }
+			const result = await useCase.execute({
+				userId: "user-1",
+				amountInMainUnit: 10,
+			});
 
-  async findAll(page: number, limit: number): Promise<Round[]> {
-    return this.rounds.slice((page - 1) * limit, page * limit);
-  }
+			expect(result.userId).toBe("user-1");
+			expect(result.amountInMainUnit).toBe(10);
+			expect(mockService.placedBets).toHaveLength(1);
+		});
 
-  async delete(id: string): Promise<void> {
-    this.rounds = this.rounds.filter(r => r.id !== id);
-  }
+		it("should throw with empty userId", async () => {
+			await expect(
+				useCase.execute({ userId: "", amountInMainUnit: 10 }),
+			).rejects.toThrow("User ID must be non-empty");
+		});
 
-  async exists(id: string): Promise<boolean> {
-    return this.rounds.some(r => r.id === id);
-  }
+		it("should throw with whitespace-only userId", async () => {
+			await expect(
+				useCase.execute({ userId: "   ", amountInMainUnit: 10 }),
+			).rejects.toThrow("User ID must be non-empty");
+		});
 
-  async count(): Promise<number> {
-    return this.rounds.length;
-  }
-}
+		it("should allow zero amount (watch-only)", async () => {
+			mockService.currentRound = Round.create("round-1");
 
-// Mock GamesGateway
-class MockGamesGateway {
-  events: any[] = [];
-  emitRoundStateChange() { this.events.push('stateChange'); }
-  emitMultiplierUpdate() { this.events.push('multiplierUpdate'); }
-  emitRoundCrashed() { this.events.push('roundCrashed'); }
-  emitBetPlaced() { this.events.push('betPlaced'); }
-  emitBetCashedOut() { this.events.push('betCashedOut'); }
-}
+			const result = await useCase.execute({
+				userId: "user-1",
+				amountInMainUnit: 0,
+			});
+			expect(result).toBeDefined();
+		});
 
-// Mock RabbitMQ Publisher
-class MockRabbitMQPublisher {
-  events: any[] = [];
-  async publishBetPlaced(e: any) { this.events.push(e); }
-  async publishBetCashedOut(e: any) { this.events.push(e); }
-  async publishBetLost(e: any) { this.events.push(e); }
-}
+		it("should throw with negative amount", async () => {
+			mockService.currentRound = Round.create("round-1");
 
-describe('PlaceBetUseCase', () => {
-  let mockService: MockRoundLifecycleService;
-  let useCase: PlaceBetUseCase;
+			await expect(
+				useCase.execute({ userId: "user-1", amountInMainUnit: -5 }),
+			).rejects.toThrow("Bet amount must be zero or greater");
+		});
 
-  beforeEach(() => {
-    mockService = new MockRoundLifecycleService();
-    useCase = new PlaceBetUseCase(mockService as any);
-  });
+		it("should create round when no active round exists", async () => {
+			const result = await useCase.execute({
+				userId: "user-1",
+				amountInMainUnit: 10,
+			});
+			expect(result).toBeDefined();
+			expect(mockService.currentRound).not.toBeNull();
+		});
 
-  describe('execute', () => {
-    it('should place bet with valid input', async () => {
-      mockService.currentRound = Round.create('round-1');
-      
-      const result = await useCase.execute({
-        userId: 'user-1',
-        amountInMainUnit: 10,
-      });
+		it("should convert amount to centavos", async () => {
+			mockService.currentRound = Round.create("round-1");
 
-      expect(result.userId).toBe('user-1');
-      expect(result.amountInMainUnit).toBe(10);
-      expect(mockService.placedBets).toHaveLength(1);
-    });
+			const result = await useCase.execute({
+				userId: "user-1",
+				amountInMainUnit: 10.5,
+			});
 
-    it('should throw with empty userId', async () => {
-      await expect(
-        useCase.execute({ userId: '', amountInMainUnit: 10 })
-      ).rejects.toThrow('User ID must be non-empty');
-    });
-
-    it('should throw with whitespace-only userId', async () => {
-      await expect(
-        useCase.execute({ userId: '   ', amountInMainUnit: 10 })
-      ).rejects.toThrow('User ID must be non-empty');
-    });
-
-    it('should allow zero amount (watch-only)', async () => {
-      mockService.currentRound = Round.create('round-1');
-      
-      const result = await useCase.execute({ userId: 'user-1', amountInMainUnit: 0 });
-      expect(result).toBeDefined();
-    });
-
-    it('should throw with negative amount', async () => {
-      mockService.currentRound = Round.create('round-1');
-      
-      await expect(
-        useCase.execute({ userId: 'user-1', amountInMainUnit: -5 })
-      ).rejects.toThrow('Bet amount must be zero or greater');
-    });
-
-    it('should create round when no active round exists', async () => {
-      const result = await useCase.execute({ userId: 'user-1', amountInMainUnit: 10 });
-      expect(result).toBeDefined();
-      expect(mockService.currentRound).not.toBeNull();
-    });
-
-    it('should convert amount to centavos', async () => {
-      mockService.currentRound = Round.create('round-1');
-      
-      const result = await useCase.execute({
-        userId: 'user-1',
-        amountInMainUnit: 10.50,
-      });
-
-      expect(result.amountInMainUnit).toBe(10.5);
-    });
-  });
+			expect(result.amountInMainUnit).toBe(10.5);
+		});
+	});
 });
 
-describe('GetCurrentRoundUseCase', () => {
-  let mockService: MockRoundLifecycleService;
-  let useCase: GetCurrentRoundUseCase;
+describe("GetCurrentRoundUseCase", () => {
+	let mockService: MockRoundLifecycleService;
+	let useCase: GetCurrentRoundUseCase;
 
-  beforeEach(() => {
-    mockService = new MockRoundLifecycleService();
-    useCase = new GetCurrentRoundUseCase(mockService as any);
-  });
+	beforeEach(() => {
+		mockService = new MockRoundLifecycleService();
+		useCase = new GetCurrentRoundUseCase(
+			mockService as unknown as RoundLifecycleService,
+		);
+	});
 
-  describe('execute', () => {
-    it('should return round when exists', async () => {
-      mockService.currentRound = Round.create('round-1');
-      
-      const result = await useCase.execute();
+	describe("execute", () => {
+		it("should return round when exists", async () => {
+			mockService.currentRound = Round.create("round-1");
 
-      expect(result).not.toBeNull();
-      expect(result?.id).toBe('round-1');
-    });
+			const result = await useCase.execute();
 
-    it('should throw when no round exists', async () => {
-      mockService.currentRound = null;
-      
-      await expect(useCase.execute()).rejects.toThrow('No active round');
-    });
-  });
+			expect(result).not.toBeNull();
+			expect(result?.id).toBe("round-1");
+		});
+
+		it("should throw when no round exists", async () => {
+			mockService.currentRound = null;
+
+			await expect(useCase.execute()).rejects.toThrow("No active round");
+		});
+	});
 });
 
-describe('GetRoundHistoryUseCase', () => {
-  let mockService: MockRoundLifecycleService;
-  let useCase: GetRoundHistoryUseCase;
+describe("GetRoundHistoryUseCase", () => {
+	let mockService: MockRoundLifecycleService;
+	let useCase: GetRoundHistoryUseCase;
 
-  beforeEach(() => {
-    mockService = new MockRoundLifecycleService();
-    useCase = new GetRoundHistoryUseCase(mockService as any);
-  });
+	beforeEach(() => {
+		mockService = new MockRoundLifecycleService();
+		useCase = new GetRoundHistoryUseCase(
+			mockService as unknown as RoundLifecycleService,
+		);
+	});
 
-  describe('execute', () => {
-    it('should return empty array when no rounds', async () => {
-      const result = await useCase.execute({ page: 1, limit: 10 });
-      expect(result).toEqual([]);
-    });
+	describe("execute", () => {
+		it("should return empty array when no rounds", async () => {
+			const result = await useCase.execute({ page: 1, limit: 10 });
+			expect(result).toEqual([]);
+		});
 
-    it('should return rounds with pagination', async () => {
-      mockService.historyRounds = [
-        Round.create('round-1'),
-        Round.create('round-2'),
-        Round.create('round-3'),
-      ];
+		it("should return rounds with pagination", async () => {
+			mockService.historyRounds = [
+				Round.create("round-1"),
+				Round.create("round-2"),
+				Round.create("round-3"),
+			];
 
-      const result = await useCase.execute({ page: 1, limit: 2 });
-      expect(result).toHaveLength(2);
-    });
+			const result = await useCase.execute({ page: 1, limit: 2 });
+			expect(result).toHaveLength(2);
+		});
 
-    it('should respect max limit of 100', async () => {
-      await expect(
-        useCase.execute({ page: 1, limit: 200 })
-      ).rejects.toThrow('Limit cannot exceed 100');
-    });
+		it("should respect max limit of 100", async () => {
+			await expect(useCase.execute({ page: 1, limit: 200 })).rejects.toThrow(
+				"Limit cannot exceed 100",
+			);
+		});
 
-    it('should require page >= 1', async () => {
-      await expect(
-        useCase.execute({ page: 0, limit: 10 })
-      ).rejects.toThrow('>= 1');
-    });
+		it("should require page >= 1", async () => {
+			await expect(useCase.execute({ page: 0, limit: 10 })).rejects.toThrow(
+				">= 1",
+			);
+		});
 
-    it('should require positive limit', async () => {
-      await expect(
-        useCase.execute({ page: 1, limit: 0 })
-      ).rejects.toThrow('> 0');
-    });
-  });
+		it("should require positive limit", async () => {
+			await expect(useCase.execute({ page: 1, limit: 0 })).rejects.toThrow(
+				"> 0",
+			);
+		});
+	});
 });

@@ -1,1 +1,1 @@
-export { RoundLifecycleService } from './round-lifecycle.service';
+export { RoundLifecycleService } from "./round-lifecycle.service";

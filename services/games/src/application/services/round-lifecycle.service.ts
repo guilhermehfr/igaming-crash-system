@@ -1,300 +1,322 @@
-import { Injectable, Inject, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { createHmac, randomUUID } from 'crypto';
-import { Round } from '../../domain/round.entity';
-import { Bet } from '../../domain/bet.entity';
-import { CrashPoint } from '../../domain/crash-point.vo';
-import type { IRoundRepository } from '../../domain/round.repository';
-import { GamesGateway } from '../../presentation/gateway/games.gateway';
-import { RabbitMQPublisherService } from '../../infrastructure/rabbitmq/rabbitmq-publisher.service';
-import type { IBetPlacedEvent, IBetCashedOutEvent, IBetLostEvent } from '@crash/events';
-import type { CrashPointGenerator } from './crash-point-generator';
+import {
+	Injectable,
+	Inject,
+	Logger,
+	type OnModuleDestroy,
+	type OnModuleInit,
+} from "@nestjs/common";
+import { createHmac, randomUUID } from "node:crypto";
+import { Round } from "../../domain/round.entity";
+import type { Bet } from "../../domain/bet.entity";
+import { CrashPoint } from "../../domain/crash-point.vo";
+import type { IRoundRepository } from "../../domain/round.repository";
+import type { GamesGateway } from "../../presentation/gateway/games.gateway";
+import type { RabbitMQPublisherService } from "../../infrastructure/rabbitmq/rabbitmq-publisher.service";
+import type {
+	IBetPlacedEvent,
+	IBetCashedOutEvent,
+	IBetLostEvent,
+} from "@crash/events";
+import type { CrashPointGenerator } from "./crash-point-generator";
 
 @Injectable()
 export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
-  private readonly logger = new Logger(RoundLifecycleService.name);
+	private readonly logger = new Logger(RoundLifecycleService.name);
 
-  private currentRound: Round | null = null;
-  private bettingTimerId: NodeJS.Timeout | null = null;
-  private multiplierTimerId: NodeJS.Timeout | null = null;
+	private currentRound: Round | null = null;
+	private bettingTimerId: NodeJS.Timeout | null = null;
+	private multiplierTimerId: NodeJS.Timeout | null = null;
 
-private readonly BETTING_PHASE_DURATION_MS = 5000;
-  private readonly MULTIPLIER_INCREMENT_INTERVAL_MS = 100;
-  private readonly MULTIPLIER_INCREMENT_RATE = 0.01; // 0.01 per 100ms = 100ms per 1x = ~30s to 10x
-  private readonly CRASHED_PAUSE_DURATION_MS = 5000;
-  private hasBetBeenPlaced = false;
+	private readonly BETTING_PHASE_DURATION_MS = 5000;
+	private readonly MULTIPLIER_INCREMENT_INTERVAL_MS = 100;
+	private readonly MULTIPLIER_INCREMENT_RATE = 0.01; // 0.01 per 100ms = 100ms per 1x = ~30s to 10x
+	private readonly CRASHED_PAUSE_DURATION_MS = 5000;
+	private hasBetBeenPlaced = false;
 
-  constructor(
-    @Inject('IRoundRepository')
-    private readonly roundRepository: IRoundRepository,
-    private readonly gamesGateway: GamesGateway,
-    private readonly rabbitmqPublisher: RabbitMQPublisherService,
-    @Inject('CrashPointGenerator')
-    private readonly crashPointGenerator: CrashPointGenerator,
-  ) {}
+	constructor(
+		@Inject("IRoundRepository")
+		private readonly roundRepository: IRoundRepository,
+		private readonly gamesGateway: GamesGateway,
+		private readonly rabbitmqPublisher: RabbitMQPublisherService,
+		@Inject("CrashPointGenerator")
+		private readonly crashPointGenerator: CrashPointGenerator,
+	) {}
 
-  async onModuleInit(): Promise<void> {
-    // Don't auto-start round - wait for first bet
-    this.logger.log('Game service ready. Waiting for first bet to start round...');
-  }
+	async onModuleInit(): Promise<void> {
+		// Don't auto-start round - wait for first bet
+		this.logger.log(
+			"Game service ready. Waiting for first bet to start round...",
+		);
+	}
 
-  async initializeNewRound(): Promise<void> {
-    this.logger.log('Initializing new round');
+	async initializeNewRound(): Promise<void> {
+		this.logger.log("Initializing new round");
 
-    const roundId = `round-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    this.currentRound = Round.create(roundId);
+		const roundId = `round-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+		this.currentRound = Round.create(roundId);
 
-    await this.roundRepository.save(this.currentRound);
-    this.logger.log(`Round ${roundId} created in BETTING state`);
+		await this.roundRepository.save(this.currentRound);
+		this.logger.log(`Round ${roundId} created in BETTING state`);
 
-    this.startBettingPhase();
-  }
+		this.startBettingPhase();
+	}
 
-  private startBettingPhase(): void {
-    if (!this.currentRound) return;
+	private startBettingPhase(): void {
+		if (!this.currentRound) return;
 
-    this.logger.log(`Betting phase started for round ${this.currentRound.id}`);
+		this.logger.log(`Betting phase started for round ${this.currentRound.id}`);
 
-    this.gamesGateway.emitRoundStateChange(
-      this.currentRound.id,
-      this.currentRound.state,
-      null,
-    );
+		this.gamesGateway.emitRoundStateChange(
+			this.currentRound.id,
+			this.currentRound.state,
+			null,
+		);
 
-    this.bettingTimerId = setTimeout(async () => {
-      await this.transitionToRunning();
-    }, this.BETTING_PHASE_DURATION_MS);
-  }
+		this.bettingTimerId = setTimeout(async () => {
+			await this.transitionToRunning();
+		}, this.BETTING_PHASE_DURATION_MS);
+	}
 
-  private async transitionToRunning(): Promise<void> {
-    if (!this.currentRound) return;
+	private async transitionToRunning(): Promise<void> {
+		if (!this.currentRound) return;
 
-    this.logger.log(`Transitioning round ${this.currentRound.id} to RUNNING`);
+		this.logger.log(`Transitioning round ${this.currentRound.id} to RUNNING`);
 
-    try {
-      const seed = `${Date.now()}-${Math.random().toString(36).substr(2, 16)}`;
-      const hash = createHmac('sha256', seed).digest('hex');
-      const crashPointMultiplier = this.crashPointGenerator.generate(hash);
+		try {
+			const seed = `${Date.now()}-${Math.random().toString(36).substr(2, 16)}`;
+			const hash = createHmac("sha256", seed).digest("hex");
+			const crashPointMultiplier = this.crashPointGenerator.generate(hash);
 
-      const crashPoint = CrashPoint.create(crashPointMultiplier, hash, seed);
+			const crashPoint = CrashPoint.create(crashPointMultiplier, hash, seed);
 
-      this.currentRound.setCrashPoint(crashPoint);
-      this.currentRound.startRound();
+			this.currentRound.setCrashPoint(crashPoint);
+			this.currentRound.startRound();
 
-      await this.roundRepository.save(this.currentRound);
+			await this.roundRepository.save(this.currentRound);
 
-      this.logger.log(
-        `Round ${this.currentRound.id} now RUNNING with crash point ${crashPointMultiplier}`,
-      );
+			this.logger.log(
+				`Round ${this.currentRound.id} now RUNNING with crash point ${crashPointMultiplier}`,
+			);
 
-      this.gamesGateway.emitRoundStateChange(
-        this.currentRound.id,
-        this.currentRound.state,
-        crashPointMultiplier,
-      );
+			this.gamesGateway.emitRoundStateChange(
+				this.currentRound.id,
+				this.currentRound.state,
+				crashPointMultiplier,
+			);
 
-      this.startMultiplierLoop();
-    } catch (error) {
-      this.logger.error(
-        `Error transitioning to RUNNING: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  }
+			this.startMultiplierLoop();
+		} catch (error) {
+			this.logger.error(
+				`Error transitioning to RUNNING: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
+	}
 
-  private startMultiplierLoop(): void {
-    if (!this.currentRound) return;
+	private startMultiplierLoop(): void {
+		if (!this.currentRound) return;
 
-    let currentMultiplier = 1.0;
+		let currentMultiplier = 1.0;
 
-    this.multiplierTimerId = setInterval(async () => {
-      if (!this.currentRound) {
-        clearInterval(this.multiplierTimerId!);
-        return;
-      }
+		const timerId = setInterval(async () => {
+			if (!this.currentRound) {
+				clearInterval(timerId);
+				return;
+			}
 
-      try {
-        currentMultiplier = Math.round((currentMultiplier + this.MULTIPLIER_INCREMENT_RATE) * 1000) / 1000;
+			try {
+				currentMultiplier =
+					Math.round(
+						(currentMultiplier + this.MULTIPLIER_INCREMENT_RATE) * 1000,
+					) / 1000;
 
-        this.currentRound.updateMultiplier(currentMultiplier);
+				this.currentRound.updateMultiplier(currentMultiplier);
 
-        this.gamesGateway.emitMultiplierUpdate(
-          this.currentRound.id,
-          currentMultiplier,
-          this.currentRound.state,
-        );
+				this.gamesGateway.emitMultiplierUpdate(
+					this.currentRound.id,
+					currentMultiplier,
+					this.currentRound.state,
+				);
 
-        if (this.currentRound.hasCrashed()) {
-          clearInterval(this.multiplierTimerId!);
-          await this.transitionToCrashed();
-        }
-      } catch (error) {
-        this.logger.error(
-          `Error in multiplier loop: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        clearInterval(this.multiplierTimerId!);
-      }
-    }, this.MULTIPLIER_INCREMENT_INTERVAL_MS);
-  }
+				if (this.currentRound.hasCrashed()) {
+					clearInterval(timerId);
+					await this.transitionToCrashed();
+				}
+			} catch (error) {
+				this.logger.error(
+					`Error in multiplier loop: ${error instanceof Error ? error.message : String(error)}`,
+				);
+				clearInterval(timerId);
+			}
+		}, this.MULTIPLIER_INCREMENT_INTERVAL_MS);
+		this.multiplierTimerId = timerId;
+	}
 
-  private async transitionToCrashed(): Promise<void> {
-    if (!this.currentRound) return;
-    
-    // Prevent double transition
-    if (this.currentRound.state === 'CRASHED') {
-      this.logger.warn('Round already crashed, skipping transition');
-      return;
-    }
+	private async transitionToCrashed(): Promise<void> {
+		if (!this.currentRound) return;
 
-    this.logger.log(
-      `Round ${this.currentRound.id} crashed at multiplier ${this.currentRound.currentMultiplier}`,
-    );
+		// Prevent double transition
+		if (this.currentRound.state === "CRASHED") {
+			this.logger.warn("Round already crashed, skipping transition");
+			return;
+		}
 
-    try {
-      this.currentRound.crash();
+		this.logger.log(
+			`Round ${this.currentRound.id} crashed at multiplier ${this.currentRound.currentMultiplier}`,
+		);
 
-      await this.roundRepository.save(this.currentRound);
+		try {
+			this.currentRound.crash();
 
-      const stats = this.currentRound.getStatistics();
-      this.logger.log(`Round settled: ${JSON.stringify(stats)}`);
+			await this.roundRepository.save(this.currentRound);
 
-      this.gamesGateway.emitRoundCrashed(
-        this.currentRound.id,
-        this.currentRound.currentMultiplier,
-        stats,
-      );
+			const stats = this.currentRound.getStatistics();
+			this.logger.log(`Round settled: ${JSON.stringify(stats)}`);
 
-      for (const bet of this.currentRound.bets) {
-        if (bet.state === 'PENDING') {
-          const betLostEvent: IBetLostEvent = {
-            type: 'bet.lost',
-            version: 1,
-            eventId: randomUUID(),
-            timestamp: new Date().toISOString(),
-            betId: bet.id,
-            userId: bet.playerId,
-            amountInCentavos: bet.betAmountInCentavos.toString(),
-            roundId: this.currentRound.id,
-            crashPoint: this.currentRound.crashPoint?.multiplier ?? 0,
-          };
-          await this.rabbitmqPublisher.publishBetLost(betLostEvent);
-        }
-      }
+			this.gamesGateway.emitRoundCrashed(
+				this.currentRound.id,
+				this.currentRound.currentMultiplier,
+				stats,
+			);
 
-      setTimeout(async () => {
-        try {
-          await this.initializeNewRound();
-        } catch (error) {
-          this.logger.error(`Error initializing new round: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      }, this.CRASHED_PAUSE_DURATION_MS);
-    } catch (error) {
-      this.logger.error(
-        `Error transitioning to CRASHED: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  }
+			for (const bet of this.currentRound.bets) {
+				if (bet.state === "PENDING") {
+					const betLostEvent: IBetLostEvent = {
+						type: "bet.lost",
+						version: 1,
+						eventId: randomUUID(),
+						timestamp: new Date().toISOString(),
+						betId: bet.id,
+						userId: bet.playerId,
+						amountInCentavos: bet.betAmountInCentavos.toString(),
+						roundId: this.currentRound.id,
+						crashPoint: this.currentRound.crashPoint?.multiplier ?? 0,
+					};
+					await this.rabbitmqPublisher.publishBetLost(betLostEvent);
+				}
+			}
 
-  async placeBet(bet: Bet): Promise<void> {
-    if (!this.currentRound) {
-      throw new Error('No active round');
-    }
+			setTimeout(async () => {
+				try {
+					await this.initializeNewRound();
+				} catch (error) {
+					this.logger.error(
+						`Error initializing new round: ${error instanceof Error ? error.message : String(error)}`,
+					);
+				}
+			}, this.CRASHED_PAUSE_DURATION_MS);
+		} catch (error) {
+			this.logger.error(
+				`Error transitioning to CRASHED: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
+	}
 
-    try {
-      this.currentRound.placeBet(bet);
-      await this.roundRepository.save(this.currentRound);
-      this.logger.log(`Bet placed: ${bet.id} in round ${this.currentRound.id}`);
+	async placeBet(bet: Bet): Promise<void> {
+		if (!this.currentRound) {
+			throw new Error("No active round");
+		}
 
-      this.gamesGateway.emitBetPlaced(this.currentRound.id, {
-        id: bet.id,
-        userId: bet.playerId,
-        amountInMainUnit: Number(bet.betAmountInCentavos) / 100,
-        state: bet.state,
-      });
+		try {
+			this.currentRound.placeBet(bet);
+			await this.roundRepository.save(this.currentRound);
+			this.logger.log(`Bet placed: ${bet.id} in round ${this.currentRound.id}`);
 
-      // Start timer after FIRST bet is placed (not on round create)
-      if (!this.hasBetBeenPlaced) {
-        this.hasBetBeenPlaced = true
-        this.startBettingPhase()
-        this.logger.log(`First bet placed, starting ${this.BETTING_PHASE_DURATION_MS}ms betting timer...`)
-      }
+			this.gamesGateway.emitBetPlaced(this.currentRound.id, {
+				id: bet.id,
+				userId: bet.playerId,
+				amountInMainUnit: Number(bet.betAmountInCentavos) / 100,
+				state: bet.state,
+			});
 
-      // Publish event (non-blocking - don't throw if fails)
-      try {
-        const betPlacedEvent: IBetPlacedEvent = {
-          type: 'bet.placed',
-          version: 1,
-          eventId: randomUUID(),
-          timestamp: new Date().toISOString(),
-          betId: bet.id,
-          userId: bet.playerId,
-          amountInCentavos: bet.betAmountInCentavos.toString(),
-          roundId: this.currentRound.id,
-        };
-        await this.rabbitmqPublisher.publishBetPlaced(betPlacedEvent);
-      } catch (mqError) {
-        this.logger.warn(`RabbitMQ publish failed (non-blocking): ${mqError instanceof Error ? mqError.message : String(mqError)}`);
-      }
-    } catch (error) {
-      this.logger.error(
-        `Error placing bet: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      throw error;
-    }
-  }
+			// Start timer after FIRST bet is placed (not on round create)
+			if (!this.hasBetBeenPlaced) {
+				this.hasBetBeenPlaced = true;
+				this.startBettingPhase();
+				this.logger.log(
+					`First bet placed, starting ${this.BETTING_PHASE_DURATION_MS}ms betting timer...`,
+				);
+			}
 
-  async cashOutBet(betId: string, multiplier: number): Promise<void> {
-    if (!this.currentRound) {
-      throw new Error('No active round');
-    }
+			// Publish event (non-blocking - don't throw if fails)
+			try {
+				const betPlacedEvent: IBetPlacedEvent = {
+					type: "bet.placed",
+					version: 1,
+					eventId: randomUUID(),
+					timestamp: new Date().toISOString(),
+					betId: bet.id,
+					userId: bet.playerId,
+					amountInCentavos: bet.betAmountInCentavos.toString(),
+					roundId: this.currentRound.id,
+				};
+				await this.rabbitmqPublisher.publishBetPlaced(betPlacedEvent);
+			} catch (mqError) {
+				this.logger.warn(
+					`RabbitMQ publish failed (non-blocking): ${mqError instanceof Error ? mqError.message : String(mqError)}`,
+				);
+			}
+		} catch (error) {
+			this.logger.error(
+				`Error placing bet: ${error instanceof Error ? error.message : String(error)}`,
+			);
+			throw error;
+		}
+	}
 
-    try {
-      this.currentRound.cashOut(betId, multiplier);
-      await this.roundRepository.save(this.currentRound);
-      this.logger.log(
-        `Bet cashed out: ${betId} at multiplier ${multiplier} in round ${this.currentRound.id}`,
-      );
+	async cashOutBet(betId: string, multiplier: number): Promise<void> {
+		if (!this.currentRound) {
+			throw new Error("No active round");
+		}
 
-      const bet = this.currentRound.bets.find((b) => b.id === betId);
-      if (bet) {
-        this.gamesGateway.emitBetCashedOut(this.currentRound.id, {
-          id: bet.id,
-          userId: bet.playerId,
-          multiplier: bet.cashOutMultiplier,
-          winningsInMainUnit: Number(bet.winningsInCentavos ?? 0n) / 100,
-        });
+		try {
+			this.currentRound.cashOut(betId, multiplier);
+			await this.roundRepository.save(this.currentRound);
+			this.logger.log(
+				`Bet cashed out: ${betId} at multiplier ${multiplier} in round ${this.currentRound.id}`,
+			);
 
-        const betCashedOutEvent: IBetCashedOutEvent = {
-          type: 'bet.cashed-out',
-          version: 1,
-          eventId: randomUUID(),
-          timestamp: new Date().toISOString(),
-          betId: bet.id,
-          userId: bet.playerId,
-          amountInCentavos: bet.betAmountInCentavos.toString(),
-          winningsInCentavos: (bet.winningsInCentavos ?? 0n).toString(),
-          multiplier: bet.cashOutMultiplier!,
-          roundId: this.currentRound.id,
-        };
-        await this.rabbitmqPublisher.publishBetCashedOut(betCashedOutEvent);
-      }
-    } catch (error) {
-      this.logger.error(
-        `Error cashing out bet: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      throw error;
-    }
-  }
+			const bet = this.currentRound.bets.find((b) => b.id === betId);
+			if (bet) {
+				this.gamesGateway.emitBetCashedOut(this.currentRound.id, {
+					id: bet.id,
+					userId: bet.playerId,
+					multiplier: bet.cashOutMultiplier,
+					winningsInMainUnit: Number(bet.winningsInCentavos ?? 0n) / 100,
+				});
 
-  getCurrentRound(): Round | null {
-    return this.currentRound;
-  }
+				const betCashedOutEvent: IBetCashedOutEvent = {
+					type: "bet.cashed-out",
+					version: 1,
+					eventId: randomUUID(),
+					timestamp: new Date().toISOString(),
+					betId: bet.id,
+					userId: bet.playerId,
+					amountInCentavos: bet.betAmountInCentavos.toString(),
+					winningsInCentavos: (bet.winningsInCentavos ?? 0n).toString(),
+					multiplier: bet.cashOutMultiplier ?? 1,
+					roundId: this.currentRound.id,
+				};
+				await this.rabbitmqPublisher.publishBetCashedOut(betCashedOutEvent);
+			}
+		} catch (error) {
+			this.logger.error(
+				`Error cashing out bet: ${error instanceof Error ? error.message : String(error)}`,
+			);
+			throw error;
+		}
+	}
 
-  async getRoundHistory(page: number, limit: number): Promise<Round[]> {
-    return this.roundRepository.findAll(page, limit);
-  }
+	getCurrentRound(): Round | null {
+		return this.currentRound;
+	}
 
-  onModuleDestroy(): void {
-    if (this.bettingTimerId) clearTimeout(this.bettingTimerId);
-    if (this.multiplierTimerId) clearInterval(this.multiplierTimerId);
-    this.logger.log('RoundLifecycleService destroyed');
-  }
+	async getRoundHistory(page: number, limit: number): Promise<Round[]> {
+		return this.roundRepository.findAll(page, limit);
+	}
+
+	onModuleDestroy(): void {
+		if (this.bettingTimerId) clearTimeout(this.bettingTimerId);
+		if (this.multiplierTimerId) clearInterval(this.multiplierTimerId);
+		this.logger.log("RoundLifecycleService destroyed");
+	}
 }

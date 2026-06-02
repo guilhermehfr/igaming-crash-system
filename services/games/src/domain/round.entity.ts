@@ -1,272 +1,289 @@
-import { Bet } from './bet.entity';
-import { CrashPoint } from './crash-point.vo';
+import type { Bet } from "./bet.entity";
+import type { CrashPoint } from "./crash-point.vo";
 
 export enum RoundState {
-  BETTING = 'BETTING',
-  RUNNING = 'RUNNING',
-  CRASHED = 'CRASHED',
+	BETTING = "BETTING",
+	RUNNING = "RUNNING",
+	CRASHED = "CRASHED",
 }
 
 export class InvalidStateTransitionError extends Error {
-  constructor(currentState: RoundState, attemptedAction: string) {
-    super(
-      `Invalid state transition: cannot perform "${attemptedAction}" while in "${currentState}" state`,
-    );
-    this.name = 'InvalidStateTransitionError';
-  }
+	constructor(currentState: RoundState, attemptedAction: string) {
+		super(
+			`Invalid state transition: cannot perform "${attemptedAction}" while in "${currentState}" state`,
+		);
+		this.name = "InvalidStateTransitionError";
+	}
 }
 
 export class Round {
-  private _id: string;
-  private _state: RoundState;
-  private _bets: Map<string, Bet>;
-  private _currentMultiplier: number;
-  private _crashPoint: CrashPoint | null;
-  private _bettingStartedAt: Date;
-  private _gameStartedAt: Date | null;
-  private _gameEndedAt: Date | null;
+	private _id: string;
+	private _state: RoundState;
+	private _bets: Map<string, Bet>;
+	private _currentMultiplier: number;
+	private _crashPoint: CrashPoint | null;
+	private _bettingStartedAt: Date;
+	private _gameStartedAt: Date | null;
+	private _gameEndedAt: Date | null;
+	private _createdAt: Date;
+	private _updatedAt: Date;
 
-  constructor(
-    id: string,
-    state: RoundState = RoundState.BETTING,
-    bets: Map<string, Bet> = new Map(),
-    currentMultiplier: number = 1.0,
-    crashPoint: CrashPoint | null = null,
-    bettingStartedAt: Date = new Date(),
-    gameStartedAt: Date | null = null,
-    gameEndedAt: Date | null = null,
-  ) {
-    this._id = id;
-    this._state = state;
-    this._bets = bets;
-    this._currentMultiplier = currentMultiplier;
-    this._crashPoint = crashPoint;
-    this._bettingStartedAt = bettingStartedAt;
-    this._gameStartedAt = gameStartedAt;
-    this._gameEndedAt = gameEndedAt;
-  }
+	constructor(
+		id: string,
+		state: RoundState = RoundState.BETTING,
+		bets: Map<string, Bet> = new Map(),
+		currentMultiplier: number = 1.0,
+		crashPoint: CrashPoint | null = null,
+		bettingStartedAt: Date = new Date(),
+		gameStartedAt: Date | null = null,
+		gameEndedAt: Date | null = null,
+	) {
+		this._id = id;
+		this._state = state;
+		this._bets = bets;
+		this._currentMultiplier = currentMultiplier;
+		this._crashPoint = crashPoint;
+		this._bettingStartedAt = bettingStartedAt;
+		this._gameStartedAt = gameStartedAt;
+		this._gameEndedAt = gameEndedAt;
+		this._createdAt = new Date();
+		this._updatedAt = this._createdAt;
+	}
 
-  static create(id: string): Round {
-    return new Round(id);
-  }
+	static create(id: string): Round {
+		return new Round(id);
+	}
 
-  get id(): string {
-    return this._id;
-  }
+	get id(): string {
+		return this._id;
+	}
 
-  get state(): RoundState {
-    return this._state;
-  }
+	get state(): RoundState {
+		return this._state;
+	}
 
-  get bets(): Bet[] {
-    return Array.from(this._bets.values());
-  }
+	get bets(): Bet[] {
+		return Array.from(this._bets.values());
+	}
 
-  get betCount(): number {
-    return this._bets.size;
-  }
+	get betCount(): number {
+		return this._bets.size;
+	}
 
-  get currentMultiplier(): number {
-    return this._currentMultiplier;
-  }
+	get currentMultiplier(): number {
+		return this._currentMultiplier;
+	}
 
-  get crashPoint(): CrashPoint | null {
-    return this._crashPoint;
-  }
+	get crashPoint(): CrashPoint | null {
+		return this._crashPoint;
+	}
 
-  get bettingStartedAt(): Date {
-    return this._bettingStartedAt;
-  }
+	get bettingStartedAt(): Date {
+		return this._bettingStartedAt;
+	}
 
-  get gameStartedAt(): Date | null {
-    return this._gameStartedAt;
-  }
+	get gameStartedAt(): Date | null {
+		return this._gameStartedAt;
+	}
 
-  get gameEndedAt(): Date | null {
-    return this._gameEndedAt;
-  }
+	get gameEndedAt(): Date | null {
+		return this._gameEndedAt;
+	}
 
-  get bettingDuration(): number {
-    const endTime = this._gameStartedAt || new Date();
-    return endTime.getTime() - this._bettingStartedAt.getTime();
-  }
+	get bettingDuration(): number {
+		const endTime = this._gameStartedAt || new Date();
+		return endTime.getTime() - this._bettingStartedAt.getTime();
+	}
 
-  isBetting(): boolean {
-    return this._state === RoundState.BETTING;
-  }
+	get createdAt(): Date {
+		return this._createdAt;
+	}
 
-  isRunning(): boolean {
-    return this._state === RoundState.RUNNING;
-  }
+	get updatedAt(): Date {
+		return this._updatedAt;
+	}
 
-  hasCrashed(): boolean {
-    return this._state === RoundState.CRASHED;
-  }
+	isBetting(): boolean {
+		return this._state === RoundState.BETTING;
+	}
 
-  private validateBettingToRunning(): void {
-    if (!this.isBetting()) {
-      throw new InvalidStateTransitionError(this._state, 'startRound');
-    }
-  }
+	isRunning(): boolean {
+		return this._state === RoundState.RUNNING;
+	}
 
-  private validateRunningToCrashed(): void {
-    if (!this.isRunning()) {
-      throw new InvalidStateTransitionError(this._state, 'crash');
-    }
-  }
+	hasCrashed(): boolean {
+		return this._state === RoundState.CRASHED;
+	}
 
-  private validateBettingOperationsAllowed(): void {
-    if (!this.isBetting()) {
-      throw new InvalidStateTransitionError(this._state, 'placeBet');
-    }
-  }
+	private validateBettingToRunning(): void {
+		if (!this.isBetting()) {
+			throw new InvalidStateTransitionError(this._state, "startRound");
+		}
+	}
 
-  private validateRunningOperationsAllowed(): void {
-    if (!this.isRunning()) {
-      throw new InvalidStateTransitionError(this._state, 'updateMultiplier');
-    }
-  }
+	private validateRunningToCrashed(): void {
+		if (!this.isRunning()) {
+			throw new InvalidStateTransitionError(this._state, "crash");
+		}
+	}
 
-  placeBet(bet: Bet): void {
-    this.validateBettingOperationsAllowed();
+	private validateBettingOperationsAllowed(): void {
+		if (!this.isBetting()) {
+			throw new InvalidStateTransitionError(this._state, "placeBet");
+		}
+	}
 
-    if (this._bets.has(bet.id)) {
-      throw new Error(`Bet ${bet.id} already exists in this round`);
-    }
+	private validateRunningOperationsAllowed(): void {
+		if (!this.isRunning()) {
+			throw new InvalidStateTransitionError(this._state, "updateMultiplier");
+		}
+	}
 
-    this._bets.set(bet.id, bet);
-  }
+	placeBet(bet: Bet): void {
+		this.validateBettingOperationsAllowed();
 
-  getBet(betId: string): Bet | null {
-    return this._bets.get(betId) || null;
-  }
+		if (this._bets.has(bet.id)) {
+			throw new Error(`Bet ${bet.id} already exists in this round`);
+		}
 
-  getPlayerBets(playerId: string): Bet[] {
-    return this.bets.filter((bet) => bet.playerId === playerId);
-  }
+		this._bets.set(bet.id, bet);
+		this._updatedAt = new Date();
+	}
 
-  setCrashPoint(crashPoint: CrashPoint): void {
-    this.validateBettingOperationsAllowed();
+	getBet(betId: string): Bet | null {
+		return this._bets.get(betId) || null;
+	}
 
-    if (this._crashPoint !== null) {
-      throw new Error('Crash point is already set for this round');
-    }
+	getPlayerBets(playerId: string): Bet[] {
+		return this.bets.filter((bet) => bet.playerId === playerId);
+	}
 
-    this._crashPoint = crashPoint;
+	setCrashPoint(crashPoint: CrashPoint): void {
+		this.validateBettingOperationsAllowed();
 
-    this.bets.forEach((bet) => {
-      if (bet.isPending()) {
-        bet.setCrashPoint(crashPoint);
-      }
-    });
-  }
+		if (this._crashPoint !== null) {
+			throw new Error("Crash point is already set for this round");
+		}
 
-  startRound(): void {
-    this.validateBettingToRunning();
+		this._crashPoint = crashPoint;
+		this._updatedAt = new Date();
 
-    if (this._crashPoint === null) {
-      throw new Error('Crash point must be set before starting the round');
-    }
+		this.bets.forEach((bet) => {
+			if (bet.isPending()) {
+				bet.setCrashPoint(crashPoint);
+			}
+		});
+	}
 
-    this._state = RoundState.RUNNING;
-    this._gameStartedAt = new Date();
-    this._currentMultiplier = 1.0;
-  }
+	startRound(): void {
+		this.validateBettingToRunning();
 
-  crash(): void {
-    this.validateRunningToCrashed();
+		if (this._crashPoint === null) {
+			throw new Error("Crash point must be set before starting the round");
+		}
 
-    this._state = RoundState.CRASHED;
-    this._gameEndedAt = new Date();
+		this._state = RoundState.RUNNING;
+		this._gameStartedAt = new Date();
+		this._currentMultiplier = 1.0;
+		this._updatedAt = new Date();
+	}
 
-    this.bets.forEach((bet) => {
-      if (bet.isPending()) {
-        // Only mark as LOST if bet amount > 0 (not watch-only)
-        if (bet.betAmountInCentavos > 0n) {
-          bet.lose();
-        }
-        // Watch-only bets (amount = 0) stay PENDING - no win, no loss
-      }
-    });
-  }
+	crash(): void {
+		this.validateRunningToCrashed();
 
-  updateMultiplier(newMultiplier: number): void {
-    this.validateRunningOperationsAllowed();
+		this._state = RoundState.CRASHED;
+		this._gameEndedAt = new Date();
+		this._updatedAt = new Date();
 
-    if (newMultiplier < 1.0) {
-      throw new Error('Multiplier must be at least 1.0');
-    }
+		this.bets.forEach((bet) => {
+			if (bet.isPending()) {
+				// Only mark as LOST if bet amount > 0 (not watch-only)
+				if (bet.betAmountInCentavos > 0n) {
+					bet.lose();
+				}
+				// Watch-only bets (amount = 0) stay PENDING - no win, no loss
+			}
+		});
+	}
 
-    if (newMultiplier < this._currentMultiplier) {
-      throw new Error('Multiplier cannot decrease');
-    }
+	updateMultiplier(newMultiplier: number): void {
+		this.validateRunningOperationsAllowed();
 
-    this._currentMultiplier = newMultiplier;
+		if (newMultiplier < 1.0) {
+			throw new Error("Multiplier must be at least 1.0");
+		}
 
-    if (this._crashPoint && this._crashPoint.hasCrashed(newMultiplier)) {
-      this.crash();
-    }
-  }
+		if (newMultiplier < this._currentMultiplier) {
+			throw new Error("Multiplier cannot decrease");
+		}
 
-cashOut(betId: string, multiplier: number): void {
-    this.validateRunningOperationsAllowed();
+		this._currentMultiplier = newMultiplier;
+		this._updatedAt = new Date();
 
-    const bet = this.bets.find((b) => b.id === betId);
-    if (!bet) {
-      throw new Error('Bet not found');
-    }
+		if (this._crashPoint?.hasCrashed(newMultiplier)) {
+			this.crash();
+		}
+	}
 
-    // Cannot cash out with 0 bet (watch-only)
-    if (bet.betAmountInCentavos === 0n) {
-      throw new Error('Cannot cash out with zero bet');
-    }
+	cashOut(betId: string, multiplier: number): void {
+		this.validateRunningOperationsAllowed();
 
-    bet.cashOut(multiplier);
-  }
+		const bet = this.bets.find((b) => b.id === betId);
+		if (!bet) {
+			throw new Error("Bet not found");
+		}
 
-  calculateTotalWagered(): bigint {
-    return this.bets.reduce(
-      (total, bet) => total + bet.betAmountInCentavos,
-      0n,
-    );
-  }
+		// Cannot cash out with 0 bet (watch-only)
+		if (bet.betAmountInCentavos === 0n) {
+			throw new Error("Cannot cash out with zero bet");
+		}
 
-  calculateTotalWinnings(): bigint {
-    return this.bets.reduce((total, bet) => {
-      if (bet.isCashedOut() && bet.winningsInCentavos) {
-        return total + bet.winningsInCentavos;
-      }
-      return total;
-    }, 0n);
-  }
+		bet.cashOut(multiplier);
+	}
 
-  calculateHouseResult(): bigint {
-    const totalWagered = this.calculateTotalWagered();
-    const totalWinnings = this.calculateTotalWinnings();
-    return totalWagered - totalWinnings;
-  }
+	calculateTotalWagered(): bigint {
+		return this.bets.reduce(
+			(total, bet) => total + bet.betAmountInCentavos,
+			0n,
+		);
+	}
 
-  getStatistics(): {
-    totalBets: number;
-    pendingBets: number;
-    cashedOutBets: number;
-    lostBets: number;
-  } {
-    let pendingBets = 0;
-    let cashedOutBets = 0;
-    let lostBets = 0;
+	calculateTotalWinnings(): bigint {
+		return this.bets.reduce((total, bet) => {
+			if (bet.isCashedOut() && bet.winningsInCentavos) {
+				return total + bet.winningsInCentavos;
+			}
+			return total;
+		}, 0n);
+	}
 
-    this.bets.forEach((bet) => {
-      if (bet.isPending()) pendingBets++;
-      else if (bet.isCashedOut()) cashedOutBets++;
-      else if (bet.isLost()) lostBets++;
-    });
+	calculateHouseResult(): bigint {
+		const totalWagered = this.calculateTotalWagered();
+		const totalWinnings = this.calculateTotalWinnings();
+		return totalWagered - totalWinnings;
+	}
 
-    return {
-      totalBets: this.betCount,
-      pendingBets,
-      cashedOutBets,
-      lostBets,
-    };
-  }
+	getStatistics(): {
+		totalBets: number;
+		pendingBets: number;
+		cashedOutBets: number;
+		lostBets: number;
+	} {
+		let pendingBets = 0;
+		let cashedOutBets = 0;
+		let lostBets = 0;
+
+		this.bets.forEach((bet) => {
+			if (bet.isPending()) pendingBets++;
+			else if (bet.isCashedOut()) cashedOutBets++;
+			else if (bet.isLost()) lostBets++;
+		});
+
+		return {
+			totalBets: this.betCount,
+			pendingBets,
+			cashedOutBets,
+			lostBets,
+		};
+	}
 }
