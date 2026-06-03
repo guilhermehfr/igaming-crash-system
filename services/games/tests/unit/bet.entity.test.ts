@@ -21,20 +21,21 @@ describe("Bet Entity", () => {
 			expect(bet.betAmountInCentavos).toBe(50000n);
 		});
 
-		it("should allow zero amount (watch-only)", () => {
-			const bet = Bet.create("bet-1", "round-1", "user-1", 0n);
-			expect(bet.betAmountInCentavos).toBe(0n);
+		it("should reject zero amount", () => {
+			expect(() => Bet.create("bet-1", "round-1", "user-1", 0n)).toThrow(
+				"Bet amount must be greater than zero",
+			);
 		});
 
 		it("should reject negative amount", () => {
 			expect(() => Bet.create("bet-1", "round-1", "user-1", -100n)).toThrow(
-				"Bet amount must be zero or greater",
+				"Bet amount must be greater than zero",
 			);
 		});
 
 		it("should reject negative as BigInt", () => {
 			expect(() => Bet.create("bet-1", "round-1", "user-1", -1n)).toThrow(
-				"Bet amount must be zero or greater",
+				"Bet amount must be greater than zero",
 			);
 		});
 	});

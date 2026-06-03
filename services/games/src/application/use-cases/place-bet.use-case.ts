@@ -14,15 +14,12 @@ export class PlaceBetUseCase {
 			throw new Error("User ID must be non-empty");
 		}
 
-		// Allow 0 bet - user watches but doesn't participate in winnings/losses
-		if (input.amountInMainUnit < 0) {
-			throw new Error("Bet amount must be zero or greater");
+		if (input.amountInMainUnit <= 0) {
+			throw new Error("Bet amount must be greater than zero");
 		}
 
-		const isWatchOnly = input.amountInMainUnit === 0;
-
 		this.logger.debug(
-			`Placing bet: userId=${input.userId}, amount=${input.amountInMainUnit}${isWatchOnly ? " (WATCH ONLY)" : ""}`,
+			`Placing bet: userId=${input.userId}, amount=${input.amountInMainUnit}`,
 		);
 
 		try {

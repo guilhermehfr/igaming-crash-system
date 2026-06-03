@@ -197,11 +197,7 @@ export class Round {
 
 		this.bets.forEach((bet) => {
 			if (bet.isPending()) {
-				// Only mark as LOST if bet amount > 0 (not watch-only)
-				if (bet.betAmountInCentavos > 0n) {
-					bet.lose();
-				}
-				// Watch-only bets (amount = 0) stay PENDING - no win, no loss
+				bet.lose();
 			}
 		});
 	}
@@ -233,10 +229,6 @@ export class Round {
 			throw new Error("Bet not found");
 		}
 
-		// Cannot cash out with 0 bet (watch-only)
-		if (bet.betAmountInCentavos === 0n) {
-			throw new Error("Cannot cash out with zero bet");
-		}
 
 		bet.cashOut(multiplier);
 	}

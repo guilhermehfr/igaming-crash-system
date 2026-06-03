@@ -74,14 +74,11 @@ describe("PlaceBetUseCase", () => {
 			).rejects.toThrow("User ID must be non-empty");
 		});
 
-		it("should allow zero amount (watch-only)", async () => {
+		it("should reject zero amount", async () => {
 			mockService.currentRound = Round.create("round-1");
-
-			const result = await useCase.execute({
-				userId: "user-1",
-				amountInMainUnit: 0,
-			});
-			expect(result).toBeDefined();
+			await expect(
+				useCase.execute({ userId: "user-1", amountInMainUnit: 0 }),
+			).rejects.toThrow("Bet amount must be greater than zero");
 		});
 
 		it("should throw with negative amount", async () => {
@@ -89,7 +86,7 @@ describe("PlaceBetUseCase", () => {
 
 			await expect(
 				useCase.execute({ userId: "user-1", amountInMainUnit: -5 }),
-			).rejects.toThrow("Bet amount must be zero or greater");
+			).rejects.toThrow("Bet amount must be greater than zero");
 		});
 
 		it("should create round when no active round exists", async () => {

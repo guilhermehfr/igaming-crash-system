@@ -8,7 +8,6 @@ plugins:
       key_claim_name: kid
       header_names:
         - authorization
-      jwks_uri: http://keycloak:8080/realms/crash-game/protocol/openid-connect/certs
 
   - name: post-function
     config:
@@ -40,6 +39,22 @@ plugins:
           if sub then
             kong.service.request.set_header("X-User-Id", sub)
           end
+
+consumers:
+  - username: keycloak
+    jwt_secrets:
+      - key: kKX05ckChdaTsm-EIHtND-QjkQiSWM0R9B-MGxOnb7k
+        algorithm: RS256
+        rsa_public_key: |
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA00cYmS5gHtTJOQu9VkfO
+          MFz7/FXp8LCyjTmBr7uFEh20uHFrSJJH0DVoFml8AWXW4wT0FHZb5vk2cSB5MAOw
+          X6IeZGEePHP0CBRVYMBv2NAwA++v8UnkmJDZNZPAMvuiZhauSyNnYvQ7bWn4YAic
+          7t+Ed0gW7olYedcSNODf7Dc8Nqc0dlDdbUMM3JeR9J1IxdGmX0/pxP/0/eJPjJSr
+          udCTf2wshteXH6D8OuVLMboFarv4wsZ8vSlMUC8+5X2L5nxmavfh3QMKesJyymVH
+          cSUdAG14MVoxd283geGSygGr2F4+WhPfKBciVKOM6gesq+y3afme+R8sZSu3y+HZ
+          0QIDAQAB
+          -----END PUBLIC KEY-----
 
 services:
   - name: games-service

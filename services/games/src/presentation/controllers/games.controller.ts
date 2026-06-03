@@ -14,11 +14,11 @@ import { CashOutDto } from "../../application/dtos/cash-out.dto";
 import { PlaceBetDto } from "../../application/dtos/place-bet.dto";
 import { RoundResponseDto } from "../../application/dtos/round-response.dto";
 import { RoundLifecycleService } from "../../application/services/round-lifecycle.service";
-import type { CashOutUseCase } from "../../application/use-cases/cash-out.use-case";
-import type { GetBetUseCase } from "../../application/use-cases/get-bet.use-case";
-import type { GetCurrentRoundUseCase } from "../../application/use-cases/get-current-round.use-case";
-import type { GetRoundHistoryUseCase } from "../../application/use-cases/get-round-history.use-case";
-import type { PlaceBetUseCase } from "../../application/use-cases/place-bet.use-case";
+import { CashOutUseCase } from "../../application/use-cases/cash-out.use-case";
+import { GetBetUseCase } from "../../application/use-cases/get-bet.use-case";
+import { GetCurrentRoundUseCase } from "../../application/use-cases/get-current-round.use-case";
+import { GetRoundHistoryUseCase } from "../../application/use-cases/get-round-history.use-case";
+import { PlaceBetUseCase } from "../../application/use-cases/place-bet.use-case";
 import type { HealthCheckResponseDto } from "../dtos/health-check-response.dto";
 
 @Controller("games")
