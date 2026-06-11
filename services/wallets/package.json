@@ -6,22 +6,25 @@
     "dev": "bun run --watch src/main.ts",
     "start": "bun run src/main.ts",
     "test": "bun test tests/unit",
-    "test:e2e": "bun test tests/e2e"
+    "test:e2e": "bun test tests/e2e",
+    "lint": "biome lint",
+		"lint:fix": "biome lint --write",
+		"format": "biome format --write",
+		"format:check": "biome format",
+		"check": "biome check --write"
   },
   "dependencies": {
     "@crash/events": "workspace:*",
-    "@golevelup/nestjs-rabbitmq": "^9.0.0",
     "@nestjs/common": "^11.1.17",
     "@nestjs/core": "^11.1.17",
     "@nestjs/platform-express": "^11.1.17",
     "@nestjs/swagger": "^11.4.2",
     "@nestjs/typeorm": "^11.0.1",
     "amqplib": "^1.0.3",
+    "biome": "^0.3.3",
     "dotenv": "^17.4.2",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2",
-    "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.28"
   },
   "devDependencies": {
