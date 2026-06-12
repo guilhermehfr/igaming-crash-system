@@ -1,2 +1,2 @@
-export { CreateWalletDto } from './create-wallet.dto';
-export { WalletResponseDto } from './wallet-response.dto';
+export { CreateWalletDto } from './create-wallet';
+export { WalletResponseDto } from './wallet-response';

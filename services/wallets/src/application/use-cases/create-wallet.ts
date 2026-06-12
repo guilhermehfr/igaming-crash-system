@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Wallet } from '../../domain/wallet.entity';
-import { Money } from '../../domain/money.value-object';
-import type { IWalletRepository } from '../../domain/wallet.repository';
-import { CreateWalletDto } from '../dtos/create-wallet.dto';
-import { WalletResponseDto } from '../dtos/wallet-response.dto';
+import { Wallet } from '@domain/wallet.entity';
+import { Money } from '@domain/money.vo';
+import type { IWalletRepository } from '@domain/wallet.repository';
+import { CreateWalletDto } from '@application/dtos/create-wallet';
+import { WalletResponseDto } from '@application/dtos/wallet-response';
 
 @Injectable()
 export class CreateWalletUseCase {

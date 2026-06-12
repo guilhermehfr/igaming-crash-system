@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { IWalletRepository } from '../../domain/wallet.repository';
-import { WalletResponseDto } from '../dtos/wallet-response.dto';
+import type { IWalletRepository } from '@domain/wallet.repository';
+import { WalletResponseDto } from '@application/dtos/wallet-response';
 
 @Injectable()
 export class GetWalletUseCase {

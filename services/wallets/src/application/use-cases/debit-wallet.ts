@@ -1,10 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { IWalletRepository } from '../../domain/wallet.repository';
-import { Money } from '../../domain/money.value-object';
-import { WalletResponseDto } from '../dtos/wallet-response.dto';
+import type { IWalletRepository } from '@domain/wallet.repository';
+import { Money } from '@domain/money.vo';
+import { WalletResponseDto } from '@application/dtos/wallet-response';
 
 @Injectable()
-export class CreditWalletUseCase {
+export class DebitWalletUseCase {
   constructor(
     @Inject('IWalletRepository')
     private readonly walletRepository: IWalletRepository,
@@ -24,9 +24,16 @@ export class CreditWalletUseCase {
       throw new Error(`Wallet not found for user ${userId}`);
     }
 
-    const amountToCredit = Money.fromMainUnit(amountInMainUnit);
+    const amountToDebit = Money.fromMainUnit(amountInMainUnit);
 
-    wallet.deposit(amountToCredit);
+    if (!wallet.hasSufficientFunds(amountToDebit)) {
+      throw new Error(
+        `Insufficient funds: wallet balance is ${wallet.balance.amountInMainUnit}, ` +
+        `but ${amountInMainUnit} is required`,
+      );
+    }
+
+    wallet.withdraw(amountToDebit);
 
     await this.walletRepository.save(wallet);
 

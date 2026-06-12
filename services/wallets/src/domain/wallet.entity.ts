@@ -1,4 +1,4 @@
-import { Money } from './money.value-object';
+import { Money } from './money.vo';
 
 export class Wallet {
   private _id: string;

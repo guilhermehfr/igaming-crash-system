@@ -1,22 +1,16 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  Headers,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
-import { CreateWalletUseCase } from '../../application/use-cases/create-wallet.use-case';
-import { GetWalletUseCase } from '../../application/use-cases/get-wallet.use-case';
-import { DebitWalletUseCase } from '../../application/use-cases/debit-wallet.use-case';
-import { CreditWalletUseCase } from '../../application/use-cases/credit-wallet.use-case';
-import { CreateWalletDto } from '../../application/dtos/create-wallet.dto';
-import { WalletResponseDto } from '../../application/dtos/wallet-response.dto';
-import { HealthCheckResponseDto } from '../dtos/health-check-response.dto';
+import { Controller, Get, Post, Body, Req, UseGuards } from '@nestjs/common';
+
+import { XUserIdGuard } from '@presentation/guards/x-user-id.guard';
+import { CreateWalletUseCase } from '@application/use-cases/create-wallet';
+import { GetWalletUseCase } from '@application/use-cases/get-wallet';
+import { DebitWalletUseCase } from '@application/use-cases/debit-wallet';
+import { CreditWalletUseCase } from '@application/use-cases/credit-wallet';
+import { CreateWalletDto } from '@application/dtos/create-wallet';
+import { WalletResponseDto } from '@application/dtos/wallet-response';
+import type { HealthCheckResponseDto } from '@presentation/dtos/health-check-response.dto';
 
 @Controller('wallets')
+@UseGuards(XUserIdGuard)
 export class WalletsController {
   constructor(
     private readonly createWalletUseCase: CreateWalletUseCase,
@@ -32,89 +26,35 @@ export class WalletsController {
 
   @Post()
   async createWallet(
-    @Headers('x-user-id') userId: string | undefined,
+    @Req() req: Record<string, unknown>,
     @Body() body: { initialBalanceInMainUnit?: number; userId?: string },
   ): Promise<WalletResponseDto> {
-    try {
-      if (body.userId) {
-        throw new Error('User ID must not be provided in the request body');
-      }
-      if (!userId) {
-        throw new HttpException('Missing X-User-Id header', HttpStatus.BAD_REQUEST);
-      }
-      const dto = new CreateWalletDto(userId, body.initialBalanceInMainUnit);
-      return await this.createWalletUseCase.execute(dto);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new HttpException(message, HttpStatus.BAD_REQUEST);
-    }
+    const dto = new CreateWalletDto(
+      req.userId as string,
+      body.initialBalanceInMainUnit,
+      body.userId,
+    );
+    return await this.createWalletUseCase.execute(dto);
   }
 
   @Get(':userId')
-  async getWallet(
-    @Headers('x-user-id') headerUserId: string | undefined,
-    @Param('userId') userId: string,
-  ): Promise<WalletResponseDto> {
-    try {
-      if (!headerUserId) {
-        throw new HttpException('Missing X-User-Id header', HttpStatus.BAD_REQUEST);
-      }
-      if (userId !== headerUserId) {
-        throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
-      }
-      return await this.getWalletUseCase.execute(userId);
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      throw new HttpException(message, HttpStatus.NOT_FOUND);
-    }
+  async getWallet(@Req() req: Record<string, unknown>): Promise<WalletResponseDto> {
+    return await this.getWalletUseCase.execute(req.userId as string);
   }
 
   @Post(':userId/debit')
   async debitWallet(
-    @Headers('x-user-id') headerUserId: string | undefined,
-    @Param('userId') userId: string,
+    @Req() req: Record<string, unknown>,
     @Body() body: { amountInMainUnit: number },
   ): Promise<WalletResponseDto> {
-    try {
-      if (!headerUserId) {
-        throw new HttpException('Missing X-User-Id header', HttpStatus.BAD_REQUEST);
-      }
-      if (userId !== headerUserId) {
-        throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
-      }
-      return await this.debitWalletUseCase.execute(userId, body.amountInMainUnit);
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      throw new HttpException(message, HttpStatus.BAD_REQUEST);
-    }
+    return await this.debitWalletUseCase.execute(req.userId as string, body.amountInMainUnit);
   }
 
   @Post(':userId/credit')
   async creditWallet(
-    @Headers('x-user-id') headerUserId: string | undefined,
-    @Param('userId') userId: string,
+    @Req() req: Record<string, unknown>,
     @Body() body: { amountInMainUnit: number },
   ): Promise<WalletResponseDto> {
-    try {
-      if (!headerUserId) {
-        throw new HttpException('Missing X-User-Id header', HttpStatus.BAD_REQUEST);
-      }
-      if (userId !== headerUserId) {
-        throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
-      }
-      return await this.creditWalletUseCase.execute(userId, body.amountInMainUnit);
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      throw new HttpException(message, HttpStatus.BAD_REQUEST);
-    }
+    return await this.creditWalletUseCase.execute(req.userId as string, body.amountInMainUnit);
   }
 }

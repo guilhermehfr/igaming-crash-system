@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import type { IConsumedEventRepository, EventType } from '../../domain/consumed-event.repository';
+import type { IConsumedEventRepository, EventType } from '@domain/consumed-event.repository';
 
 @Injectable()
 export class ConsumedEventRepository implements IConsumedEventRepository {

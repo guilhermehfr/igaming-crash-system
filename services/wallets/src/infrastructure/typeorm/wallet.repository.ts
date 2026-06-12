@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Wallet } from '../../domain/wallet.entity';
-import { Money } from '../../domain/money.value-object';
-import { IWalletRepository } from '../../domain/wallet.repository';
+import { Wallet } from '@domain/wallet.entity';
+import { Money } from '@domain/money.vo';
+import { IWalletRepository } from '@domain/wallet.repository';
 import { WalletTypeormEntity } from './wallet.typeorm-entity';
 
 @Injectable()

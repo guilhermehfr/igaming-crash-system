@@ -1,4 +1,4 @@
-export { CreateWalletUseCase } from './create-wallet.use-case';
-export { GetWalletUseCase } from './get-wallet.use-case';
-export { DebitWalletUseCase } from './debit-wallet.use-case';
-export { CreditWalletUseCase } from './credit-wallet.use-case';
+export { CreateWalletUseCase } from './create-wallet';
+export { GetWalletUseCase } from './get-wallet';
+export { DebitWalletUseCase } from './debit-wallet';
+export { CreditWalletUseCase } from './credit-wallet';

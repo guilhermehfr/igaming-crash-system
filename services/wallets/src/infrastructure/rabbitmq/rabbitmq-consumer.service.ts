@@ -1,10 +1,10 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import * as amqp from 'amqplib'
 import type { IBetPlacedEvent, IBetCashedOutEvent, IBetLostEvent } from '@crash/events'
-import { DebitWalletUseCase } from '../../application/use-cases/debit-wallet.use-case'
-import { CreditWalletUseCase } from '../../application/use-cases/credit-wallet.use-case'
-import type { IConsumedEventRepository } from '../../domain/consumed-event.repository'
-import { EventType } from '../../domain/consumed-event.repository'
+import { DebitWalletUseCase } from '@application/use-cases/debit-wallet'
+import { CreditWalletUseCase } from '@application/use-cases/credit-wallet'
+import type { IConsumedEventRepository } from '@domain/consumed-event.repository'
+import { EventType } from '@domain/consumed-event.repository'
 
 const MAX_RETRIES = 3
 
