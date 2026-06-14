@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { Money } from '../../src/domain/money.value-object';
+import { Money } from '@domain/money.vo';
 
 describe('Money Value Object', () => {
   describe('Creation', () => {

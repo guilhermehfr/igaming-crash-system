@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { CreateWalletUseCase } from '../../src/application/use-cases/create-wallet.use-case';
-import { GetWalletUseCase } from '../../src/application/use-cases/get-wallet.use-case';
-import { DebitWalletUseCase } from '../../src/application/use-cases/debit-wallet.use-case';
-import { CreditWalletUseCase } from '../../src/application/use-cases/credit-wallet.use-case';
-import { Wallet } from '../../src/domain/wallet.entity';
-import { Money } from '../../src/domain/money.value-object';
-import type { IWalletRepository } from '../../src/domain/wallet.repository';
+import { CreateWalletUseCase } from '@application/use-cases/create-wallet';
+import { GetWalletUseCase } from '@application/use-cases/get-wallet';
+import { DebitWalletUseCase } from '@application/use-cases/debit-wallet';
+import { CreditWalletUseCase } from '@application/use-cases/credit-wallet';
+import { Wallet } from '@domain/wallet.entity';
+import { Money } from '@domain/money.vo';
+import type { IWalletRepository } from '@domain/wallet.repository';
 
 // Mock IWalletRepository
 class MockWalletRepository implements IWalletRepository {

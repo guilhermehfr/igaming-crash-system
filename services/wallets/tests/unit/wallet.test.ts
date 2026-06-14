@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { Wallet } from '../../src/domain/wallet.entity';
-import { Money } from '../../src/domain/money.value-object';
+import { Wallet } from '@domain/wallet.entity';
+import { Money } from '@domain/money.vo';
 
 describe('Wallet Entity', () => {
   describe('Creation', () => {

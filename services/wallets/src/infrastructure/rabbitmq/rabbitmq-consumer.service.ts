@@ -5,6 +5,7 @@ import { DebitWalletUseCase } from '@application/use-cases/debit-wallet'
 import { CreditWalletUseCase } from '@application/use-cases/credit-wallet'
 import type { IConsumedEventRepository } from '@domain/consumed-event.repository'
 import { EventType } from '@domain/consumed-event.repository'
+import { config } from '@config/configuration'
 
 const MAX_RETRIES = 3
 
@@ -37,7 +38,7 @@ export class RabbitMQConsumerService implements OnModuleDestroy, OnModuleInit {
   }
 
   private async startConsuming(): Promise<void> {
-    const rabbitUrl = process.env.RABBITMQ_URL ?? 'amqp://admin:admin@localhost:5672'
+    const rabbitUrl = config.rabbitmq.url
     this.logger.log(`[RABBITMQ] STARTING - URL: ${rabbitUrl}`)
 
     try {

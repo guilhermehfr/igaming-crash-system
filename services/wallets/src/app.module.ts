@@ -12,16 +12,17 @@ import { CreditWalletUseCase } from '@application/use-cases/credit-wallet'
 import { WalletsController } from '@presentation/controllers/wallets.controller'
 import { GlobalExceptionFilter } from '@presentation/filters/global-exception.filter'
 import { RabbitMQConsumerService } from '@infrastructure/rabbitmq/rabbitmq-consumer.service'
+import { config } from '@config/configuration'
 
 @Module({
   imports: [
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: process.env.DB_HOST ?? 'localhost',
-      port: Number(process.env.DB_PORT ?? 5432),
-      username: process.env.DB_USER ?? 'admin',
-      password: process.env.DB_PASS ?? 'admin',
-      database: process.env.DB_NAME ?? 'wallets',
+      host: config.database.host,
+      port: config.database.port,
+      username: config.database.user,
+      password: config.database.pass,
+      database: config.database.name,
       entities: [WalletTypeormEntity, ConsumedEventTypeormEntity],
       migrations: ['dist/infrastructure/typeorm/migrations/*.js'],
       migrationsRun: true,
