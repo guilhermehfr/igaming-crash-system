@@ -21,7 +21,15 @@
 		"strictBindCallApply": true,
 		"forceConsistentCasingInFileNames": true,
 		"noFallthroughCasesInSwitch": true,
-		"resolveJsonModule": true
+		"resolveJsonModule": true,
+		"baseUrl": "./",
+		"paths": {
+			"@application/*": ["src/application/*"],
+			"@config/*": ["src/config/*"],
+			"@domain/*": ["src/domain/*"],
+			"@infrastructure/*": ["src/infrastructure/*"],
+			"@presentation/*": ["src/presentation/*"]
+		}
 	},
 	"include": ["src/**/*"],
 	"exclude": ["node_modules", "dist", "tests"],

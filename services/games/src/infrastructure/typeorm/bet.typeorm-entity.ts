@@ -1,3 +1,4 @@
+import { BetState } from "@domain/bet.entity";
 import {
 	Column,
 	CreateDateColumn,
@@ -8,7 +9,6 @@ import {
 	type Relation,
 	UpdateDateColumn,
 } from "typeorm";
-import { BetState } from "../../domain/bet.entity";
 import { BigIntTransformer } from "./transformers/bigint.transformer";
 
 @Entity("bets")

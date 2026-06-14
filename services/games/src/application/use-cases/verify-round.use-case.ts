@@ -1,6 +1,6 @@
+import { config } from "@config/configuration";
+import type { IRoundRepository } from "@domain/round.repository";
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { config } from "../../config/configuration";
-import type { IRoundRepository } from "../../domain/round.repository";
 @Injectable()
 export class VerifyRoundUseCase {
 	private readonly logger = new Logger(VerifyRoundUseCase.name);

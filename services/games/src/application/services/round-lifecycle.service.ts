@@ -1,9 +1,15 @@
 import { createHmac, randomUUID } from "node:crypto";
+import type { CrashPointGenerator } from "@application/services/crash-point-generator";
 import type {
 	IBetCashedOutEvent,
 	IBetLostEvent,
 	IBetPlacedEvent,
 } from "@crash/events";
+import type { Bet } from "@domain/bet.entity";
+import { CrashPoint } from "@domain/crash-point.vo";
+import { Round } from "@domain/round.entity";
+import type { IRoundRepository } from "@domain/round.repository";
+import { RabbitMQPublisherService } from "@infrastructure/rabbitmq/rabbitmq-publisher.service";
 import {
 	Inject,
 	Injectable,
@@ -11,13 +17,7 @@ import {
 	type OnModuleDestroy,
 	type OnModuleInit,
 } from "@nestjs/common";
-import type { Bet } from "../../domain/bet.entity";
-import { CrashPoint } from "../../domain/crash-point.vo";
-import { Round } from "../../domain/round.entity";
-import type { IRoundRepository } from "../../domain/round.repository";
-import { RabbitMQPublisherService } from "../../infrastructure/rabbitmq/rabbitmq-publisher.service";
-import { GamesGateway } from "../../presentation/gateway/games.gateway";
-import type { CrashPointGenerator } from "./crash-point-generator";
+import { GamesGateway } from "@presentation/gateway/games.gateway";
 
 @Injectable()
 export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {

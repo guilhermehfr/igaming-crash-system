@@ -1,23 +1,23 @@
-import { Module } from "@nestjs/common";
-import { TypeOrmModule } from "@nestjs/typeorm";
-import type { CrashPointGenerator } from "./application/services/crash-point-generator";
+import type { CrashPointGenerator } from "@application/services/crash-point-generator";
 import {
 	FixedCrashPointGenerator,
 	ProvablyFairCrashPointGenerator,
-} from "./application/services/crash-point-generator";
-import { RoundLifecycleService } from "./application/services/round-lifecycle.service";
-import { CashOutUseCase } from "./application/use-cases/cash-out.use-case";
-import { GetBetUseCase } from "./application/use-cases/get-bet.use-case";
-import { GetCurrentRoundUseCase } from "./application/use-cases/get-current-round.use-case";
-import { GetRoundHistoryUseCase } from "./application/use-cases/get-round-history.use-case";
-import { PlaceBetUseCase } from "./application/use-cases/place-bet.use-case";
-import { config } from "./config/configuration";
-import { RabbitMQPublisherService } from "./infrastructure/rabbitmq/rabbitmq-publisher.service";
-import { BetTypeormEntity } from "./infrastructure/typeorm/bet.typeorm-entity";
-import { RoundRepository } from "./infrastructure/typeorm/round.repository";
-import { RoundTypeormEntity } from "./infrastructure/typeorm/round.typeorm-entity";
-import { GamesController } from "./presentation/controllers/games.controller";
-import { GamesGateway } from "./presentation/gateway/games.gateway";
+} from "@application/services/crash-point-generator";
+import { RoundLifecycleService } from "@application/services/round-lifecycle.service";
+import { CashOutUseCase } from "@application/use-cases/cash-out.use-case";
+import { GetBetUseCase } from "@application/use-cases/get-bet.use-case";
+import { GetCurrentRoundUseCase } from "@application/use-cases/get-current-round.use-case";
+import { GetRoundHistoryUseCase } from "@application/use-cases/get-round-history.use-case";
+import { PlaceBetUseCase } from "@application/use-cases/place-bet.use-case";
+import { config } from "@config/configuration";
+import { RabbitMQPublisherService } from "@infrastructure/rabbitmq/rabbitmq-publisher.service";
+import { BetTypeormEntity } from "@infrastructure/typeorm/bet.typeorm-entity";
+import { RoundRepository } from "@infrastructure/typeorm/round.repository";
+import { RoundTypeormEntity } from "@infrastructure/typeorm/round.typeorm-entity";
+import { Module } from "@nestjs/common";
+import { TypeOrmModule } from "@nestjs/typeorm";
+import { GamesController } from "@presentation/controllers/games.controller";
+import { GamesGateway } from "@presentation/gateway/games.gateway";
 
 @Module({
 	imports: [

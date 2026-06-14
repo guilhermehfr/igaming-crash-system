@@ -1,4 +1,4 @@
-import type { Bet } from "../../domain/bet.entity";
+import type { Bet } from "@domain/bet.entity";
 
 export class BetResponseDto {
 	constructor(

@@ -1,5 +1,5 @@
-import type { Round } from "../../domain/round.entity";
-import { BetResponseDto } from "./bet-response.dto";
+import { BetResponseDto } from "@application/dtos/bet-response.dto";
+import type { Round } from "@domain/round.entity";
 
 export class RoundResponseDto {
 	constructor(

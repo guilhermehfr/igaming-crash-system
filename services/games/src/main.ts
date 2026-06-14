@@ -1,10 +1,10 @@
 import "reflect-metadata";
-import "./config/configuration";
+import "@config/configuration";
 
+import { config } from "@config/configuration";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
-import { config } from "./config/configuration";
 
 async function bootstrap(): Promise<void> {
 	const app = await NestFactory.create(AppModule);

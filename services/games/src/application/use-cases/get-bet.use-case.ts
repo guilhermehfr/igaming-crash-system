@@ -1,6 +1,6 @@
+import { BetResponseDto } from "@application/dtos/bet-response.dto";
+import { RoundLifecycleService } from "@application/services/round-lifecycle.service";
 import { Injectable, Logger } from "@nestjs/common";
-import { BetResponseDto } from "../dtos/bet-response.dto";
-import { RoundLifecycleService } from "../services/round-lifecycle.service";
 
 @Injectable()
 export class GetBetUseCase {

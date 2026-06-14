@@ -1,3 +1,4 @@
+import { config } from "@config/configuration";
 import type {
 	IBetCashedOutEvent,
 	IBetLostEvent,
@@ -5,8 +6,6 @@ import type {
 } from "@crash/events";
 import { Injectable, Logger } from "@nestjs/common";
 import * as amqp from "amqplib";
-
-import { config } from "../../config/configuration";
 
 @Injectable()
 export class RabbitMQPublisherService {

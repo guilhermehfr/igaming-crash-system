@@ -1,3 +1,4 @@
+import { RoundState } from "@domain/round.entity";
 import {
 	Column,
 	CreateDateColumn,
@@ -7,7 +8,6 @@ import {
 	type Relation,
 	UpdateDateColumn,
 } from "typeorm";
-import { RoundState } from "../../domain/round.entity";
 
 @Entity("rounds")
 export class RoundTypeormEntity {

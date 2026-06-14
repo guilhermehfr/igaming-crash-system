@@ -229,7 +229,6 @@ export class Round {
 			throw new Error("Bet not found");
 		}
 
-
 		bet.cashOut(multiplier);
 	}
 
