@@ -1,11 +1,11 @@
-import { describe, it, expect } from "bun:test";
-import {
-	Round,
-	RoundState,
-	InvalidStateTransitionError,
-} from "../../src/domain/round.entity";
+import { describe, expect, it } from "bun:test";
 import { Bet, BetState } from "../../src/domain/bet.entity";
 import { CrashPoint } from "../../src/domain/crash-point.vo";
+import {
+	InvalidStateTransitionError,
+	Round,
+	RoundState,
+} from "../../src/domain/round.entity";
 
 describe("Round Entity", () => {
 	describe("State Machine", () => {

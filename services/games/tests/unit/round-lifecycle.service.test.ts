@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { RoundLifecycleService } from "../../src/application/services/round-lifecycle.service";
-import { type Round, RoundState } from "../../src/domain/round.entity";
 import { Bet } from "../../src/domain/bet.entity";
+import { type Round, RoundState } from "../../src/domain/round.entity";
 import type { IRoundRepository } from "../../src/domain/round.repository";
 
 // Mock implementations

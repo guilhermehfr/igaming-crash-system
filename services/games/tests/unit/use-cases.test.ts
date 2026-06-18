@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach } from "bun:test";
-import { PlaceBetUseCase } from "../../src/application/use-cases/place-bet.use-case";
+import { beforeEach, describe, expect, it } from "bun:test";
+import type { RoundLifecycleService } from "../../src/application/services/round-lifecycle.service";
 import { GetCurrentRoundUseCase } from "../../src/application/use-cases/get-current-round.use-case";
 import { GetRoundHistoryUseCase } from "../../src/application/use-cases/get-round-history.use-case";
-import type { RoundLifecycleService } from "../../src/application/services/round-lifecycle.service";
-import { Round } from "../../src/domain/round.entity";
+import { PlaceBetUseCase } from "../../src/application/use-cases/place-bet.use-case";
 import type { Bet } from "../../src/domain/bet.entity";
+import { Round } from "../../src/domain/round.entity";
+
 // Mock RoundLifecycleService
 class MockRoundLifecycleService {
 	currentRound: Round | null = null;

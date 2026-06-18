@@ -52,6 +52,12 @@ export class GamesController {
 					HttpStatus.BAD_REQUEST,
 				);
 			}
+			if (body.amountInMainUnit <= 0) {
+				throw new HttpException(
+					"Bet amount must be greater than zero",
+					HttpStatus.BAD_REQUEST,
+				);
+			}
 			const dto = new PlaceBetDto(userId, body.amountInMainUnit);
 			return await this.placeBetUseCase.execute(dto);
 		} catch (error) {

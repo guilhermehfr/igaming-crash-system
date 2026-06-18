@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import http from "node:http";
 
 const GAMES_URL = "http://localhost:4001";
@@ -144,24 +144,8 @@ describe("E2E Smoke Test - Distributed System Integration", () => {
 			expect(cashOutRes.status).toBeLessThan(300);
 			console.log(`[Win] Cashed out bet at ${MULTIPLIER}x`);
 
-			// Step 6: Poll wallet until debited (balance = INITIAL - BET)
-			const debitedBalance = INITIAL_BALANCE - BET_AMOUNT;
-			console.log(
-				`[Win] Polling for debit: expected balance = ${debitedBalance}`,
-			);
-
-			const walletAfterDebit = await pollUntil(
-				() =>
-					request(`${WALLETS_URL}/wallets/${userId}`, {
-						headers: { "X-User-Id": userId },
-					}),
-				(res) => res.data?.balanceInMainUnit === debitedBalance,
-				15000,
-			);
-			expect(walletAfterDebit.data.balanceInMainUnit).toBe(debitedBalance);
-			console.log(`[Win] Wallet debited: ${debitedBalance}`);
-
-			// Step 7: Poll wallet until credited (balance = INITIAL - BET + WINNINGS)
+			// Step 6: Poll wallet until final balance (INITIAL - BET + WINNINGS)
+			// Debit and credit events may arrive in any order, so skip intermediate
 			const finalBalance = INITIAL_BALANCE - BET_AMOUNT + WINNINGS;
 			console.log(`[Win] Polling wallet for final balance: ${finalBalance}`);
 

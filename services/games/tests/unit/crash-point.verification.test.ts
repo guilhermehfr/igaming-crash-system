@@ -1,6 +1,6 @@
-import { describe, it, expect } from "bun:test";
-import { CrashPoint } from "../../src/domain/crash-point.vo";
+import { describe, expect, it } from "bun:test";
 import { createHmac, randomBytes } from "node:crypto";
+import { CrashPoint } from "../../src/domain/crash-point.vo";
 
 describe("CrashPoint Provably Fair Verification", () => {
 	const serverSecret = "dev-secret-key-change-in-prod";
