@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import type { CrashPointGenerator } from "@application/services/crash-point-generator";
 import { RoundLifecycleService } from "../../src/application/services/round-lifecycle.service";
 import { Bet } from "../../src/domain/bet.entity";
 import { type Round, RoundState } from "../../src/domain/round.entity";
@@ -99,6 +100,12 @@ class MockGamesGateway {
 	}
 }
 
+class MockCrashPointGenerator implements CrashPointGenerator {
+	generate(_hash: string): number {
+		return 2.0;
+	}
+}
+
 class MockRabbitMQPublisher {
 	events: Array<{ type: string; data: Record<string, unknown> }> = [];
 
@@ -133,6 +140,7 @@ describe("RoundLifecycleService", () => {
 			gamesGateway as any,
 			// biome-ignore lint/suspicious/noExplicitAny: mock casts in tests
 			rabbitmqPublisher as any,
+			new MockCrashPointGenerator(),
 		);
 	});
 
