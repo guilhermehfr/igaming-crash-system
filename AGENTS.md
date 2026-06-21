@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **iGaming Crash System** is a microservices-based betting platform with an explicit state machine for crash game rounds. The codebase uses **Domain-Driven Design (DDD)** and **Hexagonal Architecture** with **Bun** as the runtime and **NestJS** as the application framework.
 
-**Status**: Domain layer ✅ complete (1,247 lines). Wallets application layer ✅ complete (376 lines). Games application layer ✅ complete (824 lines). Infrastructure layer ✅ complete (841 lines). Docker environment ✅ operational. Presentation layer: Games ✅ (6 endpoints), Wallets ✅ (5 endpoints). Testing ✅ complete (158 tests: 142 unit + 16 E2E).
+**Status**: Domain layer ✅ complete (1,247 lines). Application layer ✅ complete (824 lines games + 376 lines wallets). Infrastructure layer ✅ complete (841 lines). Docker environment ✅ operational. Presentation layer: Games ✅ (11 endpoints), Wallets ✅ (5 endpoints). Provably Fair ✅ complete (HMAC seed chain, 4 API endpoints, server seed rotation). Testing ✅ complete (188 tests: 172 unit + 16 E2E).
 
 ## Core Architecture
 
@@ -40,9 +40,9 @@ services/
 ├── games/
 │   └── src/
 │       ├── domain/           ✅ Complete: Round, Bet, CrashPoint entities
-│       ├── application/      ✅ Complete: RoundLifecycleService + 4 use cases (824 lines)
+│       ├── application/      ✅ Complete: RoundLifecycleService + 9 use cases (824 lines)
 │       ├── infrastructure/   ✅ Complete: TypeORM entities, repositories, migrations (841 lines total)
-│       └── presentation/     ✅ Complete: 6 endpoints (health, rounds, bets, cash-out, current, history)
+│       └── presentation/     ✅ Complete: 11 endpoints (health, rounds, bets, cash-out, current, history, provably-fair ×4)
 ├── wallets/
 │   └── src/
 │       ├── domain/           ✅ Complete: Wallet, Money value objects
@@ -96,7 +96,7 @@ round.getStatistics(): RoundStatistics
 const round = Round.create('round-1');
 round.placeBet(bet1);  // User 1: 100 units
 round.placeBet(bet2);  // User 2: 50 units
-round.setCrashPoint(CrashPoint.create(2.5, hash, seed));
+round.setCrashPoint(CrashPoint.create(2.5, hash, "client-seed-abc", 1));
 round.startRound();    // State: BETTING → RUNNING
 
 round.updateMultiplier(1.5);
@@ -128,15 +128,15 @@ bet.calculateROI(): number                      // (ProfitLoss / Bet) * 100 %
 Immutable Provably Fair representation.
 
 ```typescript
-CrashPoint.create(multiplier: number, hash: string, seed: string)
+CrashPoint.create(multiplier: number, hash: string, clientSeed: string, nonce: number)
 cp.hasCrashed(currentMultiplier: number): boolean  // true if m ≥ multiplier
 cp.isInstantCrash(): boolean                       // true if multiplier === 1.0
-cp.verifyProvablyFair(): boolean                   // [TODO] Cryptographic validation
+cp.verifyProvablyFair(serverSeed: string): boolean // Cryptographic HMAC verification
 ```
 
 **Invariants**:
 - Multiplier ≥ 1.0
-- Hash and seed non-empty
+- Hash, clientSeed non-empty; nonce ≥ 1
 - Immutable: all properties read-only
 
 ### Wallets Service Domain
@@ -228,6 +228,12 @@ interface IWalletRepository {
 6. **InvalidStateTransitionError**: Custom error type for all state violations; makes error handling explicit.
 
 7. **Bet Aggregation**: Round contains all bets; calculations use aggregate functions (`calculateTotalWagered`, `calculateHouseResult`).
+
+8. **Auth via X-User-Id Header**: Kong validates JWT and injects `X-User-Id` header with user's `sub` claim. `XUserIdGuard` ensures header presence on controllers; use cases trust this identity. No manual header parsing in actions.
+
+9. **Centralized Configuration**: `services/*/src/config/configuration.ts` reads all `process.env.*` vars with defaults and exports a typed `config` object imported by services, use cases, and main.ts.
+
+10. **Path Aliases**: `tsconfig.json` defines `@domain/`, `@application/`, `@infrastructure/`, `@presentation/`, `@config/` mapped to `src/*` subdirectories. All imports use these aliases (no relative `../../` paths).
 
 ## Recent Fixes & Troubleshooting
 
@@ -537,6 +543,11 @@ Infrastructure layer:
   - `cashOutBet(betId, multiplier)`: Delegate to round.cashOut() + persist
   - `getCurrentRound()`: Fast in-memory read
   - `getRoundHistory(page, limit)`: Query repository
+  - `getServerSeedHash()`: SHA256 of server seed (public, non-revealing)
+  - `getServerSeed()`: Current server seed (private, used by verify use case)
+  - `getClientSeed()` / `setClientSeed(seed)`: Client seed management
+  - `getNonce()`: Current nonce (auto-increments per round)
+  - `revealServerSeed()`: Rotate server seed, return old seed + new hash
 
 - **Error Handling**: Try/catch on each phase transition, descriptive logging
 
@@ -548,12 +559,14 @@ Infrastructure layer:
    - HTTP: `POST /games/bets`
    - Validates input → Create Bet entity → Delegate to RoundLifecycleService.placeBet()
    - Only works in BETTING state (enforced by service)
+   - Uses `X-User-Id` header via `XUserIdGuard` (no manual header parsing)
 
 2. **CashOutUseCase** (75 lines)
-   - Input: `CashOutDto` with betId, multiplier
+   - Input: `CashOutDto` with betId, multiplier, userId
    - Output: `BetResponseDto`
    - HTTP: `POST /games/bets/:betId/cash-out`
    - Validates round in RUNNING → Delegate to RoundLifecycleService.cashOutBet()
+   - Enforces bet ownership: throws if `bet.playerId !== userId`
    - Emits RabbitMQ `BetCashedOut` event (✅ integrated)
 
 3. **GetCurrentRoundUseCase** (45 lines)
@@ -576,6 +589,30 @@ Infrastructure layer:
    - HTTP: `POST /games/rounds`
    - Creates new round in BETTING state (manual trigger for testing)
 
+6. **GetProvablyFairStatusUseCase**
+   - Input: none
+   - Output: `ProvablyFairStatusDto` (serverSeedHash, clientSeed, nonce)
+   - HTTP: `GET /games/provably-fair`
+   - Public status of seed chain (hash only, seed not revealed)
+
+7. **RevealServerSeedUseCase**
+   - Input: none
+   - Output: `ProvablyFairRevealDto` (oldServerSeed, newServerSeedHash, currentClientSeed, currentNonce)
+   - HTTP: `POST /games/provably-fair/reveal`
+   - Rotates server seed, returns old seed for client-side verification
+
+8. **SetClientSeedUseCase**
+   - Input: `SetClientSeedDto` with clientSeed
+   - Output: `ProvablyFairStatusDto`
+   - HTTP: `POST /games/provably-fair/client-seed`
+   - Sets client seed for next round's crash point derivation
+
+9. **VerifyRoundUseCase**
+   - Input: roundId
+   - Output: Verified result (valid, hash, multiplier, formula, houseEdge)
+   - HTTP: `GET /games/rounds/:roundId/verify`
+   - Verifies crash point HMAC using revealed server seed from previous round
+
 **WebSocket Gateway** (`services/games/src/presentation/gateway/games.gateway.ts`):
    - Events broadcast via Socket.io on port 4001 (same as HTTP)
    - Events:
@@ -587,9 +624,12 @@ Infrastructure layer:
 
 **DTOs** (`services/games/src/application/dtos/`):
 - `PlaceBetDto`: userId, amountInMainUnit
-- `CashOutDto`: betId, multiplier
+- `CashOutDto`: betId, multiplier, userId
 - `BetResponseDto`: Full bet data with state, winnings, ROI; factory method `fromDomain(bet)`
 - `RoundResponseDto`: Full round + all bets; factory method `fromDomain(round)`
+- `ProvablyFairStatusDto`: serverSeedHash, clientSeed, nonce
+- `ProvablyFairRevealDto`: oldServerSeed, newServerSeedHash, currentClientSeed, currentNonce
+- `SetClientSeedDto`: clientSeed
 
 **Patterns**:
 - Constructor injection of `RoundLifecycleService`
@@ -599,6 +639,7 @@ Infrastructure layer:
 - Logging on all use case executions (debug on entry, log/error on result)
 - Bet ID generation: `bet-{timestamp}-{random}` (9-char alphanumeric)
 - Amount precision: Convert mainUnit to centavos via `BigInt(Math.round(amount * 100))`
+- `XUserIdGuard` at class level on `GamesController`: validates `X-User-Id` header, sets `req.userId` for use case consumption
 
 ### Infrastructure Layer (✅ Complete - 841 lines)
 - **Location**: `services/*/src/infrastructure/typeorm/`
@@ -633,7 +674,7 @@ balanceInCentavos: bigint
 
 | Entity | File | Purpose |
 |--------|------|---------|
-| RoundTypeormEntity | `games/src/infrastructure/typeorm/round.typeorm-entity.ts` | Stores round state, multiplier, CrashPoint (multiplier/hash/seed) |
+| RoundTypeormEntity | `games/src/infrastructure/typeorm/round.typeorm-entity.ts` | Stores round state, multiplier, CrashPoint (multiplier/hash/clientSeed/nonce) |
 | BetTypeormEntity | `games/src/infrastructure/typeorm/bet.typeorm-entity.ts` | Stores bet with BigInt precision, inherits CrashPoint from Round |
 | WalletTypeormEntity | `wallets/src/infrastructure/typeorm/wallet.typeorm-entity.ts` | Stores wallet with BigInt balance, unique userId index |
 
@@ -644,7 +685,7 @@ balanceInCentavos: bigint
 | RoundRepository | `games/src/infrastructure/typeorm/round.repository.ts` | findById, findMostRecent, findAll, save, delete, exists, count |
 | WalletRepository | `wallets/src/infrastructure/typeorm/wallet.repository.ts` | findById, findByUserId, save, delete, exists |
 
-**Mapping Pattern**: Repositories handle domain ↔ TypeORM entity conversion with factory methods. CrashPoint reconstructed from components on read.
+**Mapping Pattern**: Repositories handle domain ↔ TypeORM entity conversion with factory methods. CrashPoint reconstructed from components (multiplier, hash, clientSeed, nonce) on read.
 
 #### Database Migrations
 
@@ -656,7 +697,7 @@ balanceInCentavos: bigint
 ### Presentation Layer (✅ Complete)
 - **Location**: `services/*/src/presentation/`
 - **Current State**: Full REST controllers implemented
-- **Games Endpoints** (7): health, bets, bets/:id/cash-out, bets/:betId, current, history, rounds
+- **Games Endpoints** (11): health, rounds, bets, cash-out, bet-by-id, current, history, provably-fair-status, provably-fair-reveal, provably-fair-client-seed, round-verify
 - **Wallets Endpoints** (5): health, create, get, debit, credit
 
 ## Critical Context for Implementation
@@ -755,50 +796,36 @@ If a Round is stuck or has unexpected behavior:
 - **Database queries**: Use indexes on userId, roundId for wallet/bet lookups
 - **WebSocket broadcasts**: Filter multiplier updates to only RUNNING rounds
 
-## Next Steps for Implementer
+## Next Steps for Frontend Integration
 
-1. **Implement Presentation Layer** (400+ lines estimated)
-   - Add NestJS controllers for CRUD endpoints (games, wallets)
-   - Implement WebSocket gateway for real-time multiplier broadcasts
-   - Add error handling pipes and validation decorators
-   - Integrate Keycloak authentication (extract JWT claims)
-   - Swagger documentation for all endpoints
-   - Request/response interceptors for logging
+1. **Connect frontend to backend APIs**
+   - Use Kong gateway at `http://localhost:8000` (routes `/games/*` → 4001, `/wallets/*` → 4002)
+   - WebSocket direct to `ws://localhost:4001` (Socket.io)
+   - Auth: JWT from Keycloak → Kong validates + injects `X-User-Id`
+   - For dev without Keycloak: pass `X-User-Id` header directly
 
-2. **NestJS Module Wiring**
-   - Create TypeORM database connections with entity registration
-   - Register repositories as providers in module providers
-   - Wire use cases to repositories via constructor injection
-   - Configure migrations and database initialization
+2. **Subscribe to WebSocket events**
+   - `round:multiplier-updated`: Update multiplier display in RUNNING phase
+   - `round:state-changed`: Handle BETTING → RUNNING → CRASHED transitions
+   - `round:bet-placed` / `round:bet-cashed-out`: Update bet states
 
-3. **RabbitMQ Integration**
-   - Create publisher for game events (BetPlaced, BetCashedOut, RoundCrashed)
-   - Create subscriber in wallets service for wallet updates
-   - Message serialization/deserialization
-   - Retry logic and dead letter queue
+3. **Provably fair client-side verification**
+   - After round crashes, fetch `GET /games/rounds/:roundId/verify`
+   - Or use revealed server seed from `POST /games/provably-fair/reveal` + stored `clientSeed`/`nonce` to verify HMAC locally
 
-4. **Test & Document**
-   - Write unit tests for domain + application layers (>90% coverage)
-   - Write E2E tests for HTTP endpoints and WebSocket events
-   - Integration tests with RabbitMQ message flows
-   - Load testing for multiplier loop (100ms intervals)
-   - Update this CLAUDE.md with implementation details
-
-5. **Production Readiness**
-   - Implement Provably Fair cryptography (replace mock hashes)
-   - Add request rate limiting
-   - Implement audit logging
-   - Add monitoring/alerting (Prometheus, ELK)
-   - Performance tuning for high-concurrency rounds
+4. **E2E Testing**
+   - Ensure Docker services running (`bun docker:up`)
+   - Run `cd services/games && bun test tests/e2e`
+   - Verify full place-bet → cash-out → wallet-credit flow
 
 ---
 
-**Last Updated**: 2026-05-01  
+**Last Updated**: 2026-06-21  
 **Domain Layer Status**: ✅ Complete (1,247 lines, 7 files)  
 **Application Layer Status**: ✅ Wallets Complete (376 lines, 9 files) | ✅ Games Complete (824 lines, 13 files)  
 **Infrastructure Layer Status**: ✅ Complete (841 lines, 9 files)  
-**Presentation Layer Status**: ✅ Complete (Games: 6 endpoints, Wallets: 5 endpoints)  
+**Presentation Layer Status**: ✅ Complete (Games: 11 endpoints, Wallets: 5 endpoints)  
 **RabbitMQ Integration**: ✅ Complete (Games → Wallets async communication)  
 **Docker Environment**: ✅ Operational (PostgreSQL, RabbitMQ, Keycloak, Kong)  
-**Testing Status**: ✅ Complete (158 tests: 142 unit + 16 E2E)  
+**Testing Status**: ✅ Complete (188 tests: 172 unit + 16 E2E)  
 **Repository**: https://github.com/guilhermehfr/igaming-crash-system

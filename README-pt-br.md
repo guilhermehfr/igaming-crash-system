@@ -140,18 +140,23 @@ Todas as rotas expostas via Kong (porta 8000).
 
 ### Endpoints de Game
 
+- `GET /games/health` - Verificação de saúde do serviço
 - `GET /games/current` - Obter rodada atual
 - `GET /games/history` - Obter histórico de rodadas (paginado)
 - `POST /games/bets` - Fazer uma aposta
 - `GET /games/bets/:betId` - Obter aposta por ID
 - `POST /games/bets/:betId/cash-out` - Sacar uma aposta
 - `POST /games/rounds` - Criar uma nova rodada (disparo manual)
+- `GET /games/rounds/:roundId/verify` - Verificação provably fair
+- `GET /games/provably-fair` - Status das seeds (hash, clientSeed, nonce)
+- `POST /games/provably-fair/reveal` - Revelar e rotacionar server seed
+- `POST /games/provably-fair/client-seed` - Definir client seed
 
 ---
 
 ## Testes
 
-- **158 testes no total**: 142 unitários + 16 E2E
+- **188 testes no total**: 172 unitários + 16 E2E
 - Framework de testes nativo do Bun
 - Camada de domínio extensivamente testada
 - Use cases da camada de aplicação testados
@@ -197,4 +202,12 @@ Este comando inicializa toda a stack automaticamente (bancos, serviços, gateway
 - Comunicação assíncrona orientada a eventos
 - Consistência eventual aplicada estritamente no fluxo financeiro
 - Máquina de estados explícita no aggregate Round para lógica do jogo
+- Kong injeta o header `X-User-Id` a partir da claim `sub` do JWT; serviços confiam neste header
+- Guard `XUserIdGuard` garante presença do header em todos os endpoints
+
+## Documentação da API
+
+Swagger UI disponível em:
+- Games: `http://localhost:4001/api`
+- Wallets: `http://localhost:4002/api`
 - Frontend consome a API unificada via gateway + conexão WebSocket estável
