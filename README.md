@@ -93,6 +93,8 @@ Precision via BigInt (centavos = 1/100 of main unit, no floating-point errors).
 - Test user: `player` / `player123`
 - Realm: `crash-game`, Client: `crash-game-client`
 - Health checks are not exposed via Kong; use service ports directly
+- Kong injects `X-User-Id` header from JWT `sub` claim; services trust this header for user identity
+- `XUserIdGuard` enforces `X-User-Id` presence on all games and wallets endpoints
 
 ---
 
@@ -142,21 +144,32 @@ Health endpoints are accessed directly from service ports.
 
 ### Game Endpoints
 
+- `GET /games/health` - Service health check
 - `GET /games/current` - Get current round
 - `GET /games/history` - Get round history (paginated)
 - `POST /games/bets` - Place a bet
 - `GET /games/bets/:betId` - Get bet by ID
 - `POST /games/bets/:betId/cash-out` - Cash out a bet
 - `POST /games/rounds` - Create a new round (manual trigger)
+- `GET /games/rounds/:roundId/verify` - Provably fair verification
+- `GET /games/provably-fair` - Get seed status (hash, clientSeed, nonce)
+- `POST /games/provably-fair/reveal` - Reveal and rotate server seed
+- `POST /games/provably-fair/client-seed` - Set client seed
 
 ---
 
 ## Testing
 
-- **158 tests total**: 142 unit + 16 E2E
+- **188 tests total**: 172 unit + 16 E2E
 - Bun native test framework
 - Domain layer thoroughly tested
 - Application layer use cases tested
+
+## API Documentation
+
+Swagger UI available at:
+- Games: `http://localhost:4001/api`
+- Wallets: `http://localhost:4002/api`
 
 ---
 
