@@ -17,14 +17,27 @@ export class CashOutUseCase {
 			throw new Error("Multiplier must be at least 1.0");
 		}
 
+		if (!input.userId || input.userId.trim() === "") {
+			throw new Error("User ID must be non-empty");
+		}
+
 		this.logger.debug(
-			`Cashing out bet: betId=${input.betId}, multiplier=${input.multiplier}`,
+			`Cashing out bet: betId=${input.betId}, userId=${input.userId}, multiplier=${input.multiplier}`,
 		);
 
 		try {
 			const currentRound = this.roundLifecycleService.getCurrentRound();
 			if (!currentRound) {
 				throw new Error("No active round available");
+			}
+
+			const bet = currentRound.bets.find((b) => b.id === input.betId);
+			if (!bet) {
+				throw new Error(`Bet ${input.betId} not found in round`);
+			}
+
+			if (bet.playerId !== input.userId) {
+				throw new Error("Bet does not belong to user");
 			}
 
 			if (currentRound.state !== "RUNNING") {
@@ -41,11 +54,6 @@ export class CashOutUseCase {
 			const updatedRound = this.roundLifecycleService.getCurrentRound();
 			if (!updatedRound) {
 				throw new Error("Round unexpectedly disappeared");
-			}
-
-			const bet = updatedRound.bets.find((b) => b.id === input.betId);
-			if (!bet) {
-				throw new Error(`Bet ${input.betId} not found in round`);
 			}
 
 			this.logger.log(

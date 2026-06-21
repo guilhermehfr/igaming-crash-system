@@ -13,14 +13,16 @@ import {
 	Body,
 	Controller,
 	Get,
-	Headers,
 	HttpException,
 	HttpStatus,
 	Param,
 	Post,
 	Query,
+	Req,
+	UseGuards,
 } from "@nestjs/common";
 import type { HealthCheckResponseDto } from "@presentation/dtos/health-check-response.dto";
+import { XUserIdGuard } from "@presentation/guards/x-user-id.guard";
 import type {
 	ProvablyFairRevealDto,
 	ProvablyFairStatusDto,
@@ -28,6 +30,7 @@ import type {
 } from "@presentation/dtos/provably-fair.dto";
 
 @Controller("games")
+@UseGuards(XUserIdGuard)
 export class GamesController {
 	constructor(
 		private readonly placeBetUseCase: PlaceBetUseCase,
@@ -46,18 +49,12 @@ export class GamesController {
 
 	@Post("bets")
 	async placeBet(
-		@Headers("x-user-id") userId: string | undefined,
+		@Req() req: Record<string, unknown>,
 		@Body() body: { amountInMainUnit: number; userId?: string },
 	): Promise<BetResponseDto> {
 		try {
 			if (body.userId) {
 				throw new Error("User ID must not be provided in the request body");
-			}
-			if (!userId) {
-				throw new HttpException(
-					"Missing X-User-Id header",
-					HttpStatus.BAD_REQUEST,
-				);
 			}
 			if (body.amountInMainUnit <= 0) {
 				throw new HttpException(
@@ -65,7 +62,10 @@ export class GamesController {
 					HttpStatus.BAD_REQUEST,
 				);
 			}
-			const dto = new PlaceBetDto(userId, body.amountInMainUnit);
+			const dto = new PlaceBetDto(
+				req.userId as string,
+				body.amountInMainUnit,
+			);
 			return await this.placeBetUseCase.execute(dto);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -75,11 +75,16 @@ export class GamesController {
 
 	@Post("bets/:betId/cash-out")
 	async cashOut(
+		@Req() req: Record<string, unknown>,
 		@Param("betId") betId: string,
 		@Body() body: { multiplier: number },
 	): Promise<BetResponseDto> {
 		try {
-			const dto = new CashOutDto(betId, body.multiplier);
+			const dto = new CashOutDto(
+				betId,
+				body.multiplier,
+				req.userId as string,
+			);
 			return await this.cashOutUseCase.execute(dto);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
