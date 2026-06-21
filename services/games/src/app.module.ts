@@ -9,6 +9,7 @@ import { GetBetUseCase } from "@application/use-cases/get-bet.use-case";
 import { GetCurrentRoundUseCase } from "@application/use-cases/get-current-round.use-case";
 import { GetRoundHistoryUseCase } from "@application/use-cases/get-round-history.use-case";
 import { PlaceBetUseCase } from "@application/use-cases/place-bet.use-case";
+import { VerifyRoundUseCase } from "@application/use-cases/verify-round.use-case";
 import { config } from "@config/configuration";
 import { RabbitMQPublisherService } from "@infrastructure/rabbitmq/rabbitmq-publisher.service";
 import { BetTypeormEntity } from "@infrastructure/typeorm/bet.typeorm-entity";
@@ -60,6 +61,7 @@ import { GamesGateway } from "@presentation/gateway/games.gateway";
 		GetCurrentRoundUseCase,
 		GetRoundHistoryUseCase,
 		GetBetUseCase,
+		VerifyRoundUseCase,
 	],
 	controllers: [GamesController],
 })

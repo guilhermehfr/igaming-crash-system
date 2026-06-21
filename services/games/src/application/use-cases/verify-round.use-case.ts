@@ -1,6 +1,7 @@
-import { config } from "@config/configuration";
+import { RoundLifecycleService } from "@application/services/round-lifecycle.service";
 import type { IRoundRepository } from "@domain/round.repository";
 import { Inject, Injectable, Logger } from "@nestjs/common";
+
 @Injectable()
 export class VerifyRoundUseCase {
 	private readonly logger = new Logger(VerifyRoundUseCase.name);
@@ -8,6 +9,7 @@ export class VerifyRoundUseCase {
 	constructor(
 		@Inject("IRoundRepository")
 		private readonly roundRepository: IRoundRepository,
+		private readonly roundLifecycleService: RoundLifecycleService,
 	) {}
 
 	async execute(roundId: string): Promise<VerifyRoundResponse> {
@@ -29,9 +31,9 @@ export class VerifyRoundUseCase {
 			throw new Error(`Round ${roundId} has no crash point`);
 		}
 
-		const serverSecret = config.crash.serverSecret;
+		const serverSeed = this.roundLifecycleService.getServerSeed();
 
-		const isValid = crashPoint.verifyProvablyFair(serverSecret);
+		const isValid = crashPoint.verifyProvablyFair(serverSeed);
 
 		this.logger.log(
 			`Round ${roundId} verification: ${isValid ? "✓ VALID" : "✗ INVALID"}`,
@@ -41,10 +43,11 @@ export class VerifyRoundUseCase {
 			roundId,
 			isValid,
 			multiplier: crashPoint.multiplier,
-			seed: crashPoint.seed,
 			hash: crashPoint.hash,
+			clientSeed: crashPoint.clientSeed,
+			nonce: crashPoint.nonce,
 			formula:
-				"multiplier = floor((100 * 2^32 - h) / (2^32 - h)) / 100 where h = HMAC-SHA256(seed)[0:8]",
+				"hash = HMAC-SHA256(serverSeed, clientSeed-nonce), multiplier = floor((100 * 2^32 - h) / (2^32 - h)) / 100 where h = first 4 bytes of hash",
 			houseEdge: "~1% (instant crash if h % 100 === 0)",
 		};
 	}
@@ -54,8 +57,9 @@ export interface VerifyRoundResponse {
 	roundId: string;
 	isValid: boolean;
 	multiplier: number;
-	seed: string;
 	hash: string;
+	clientSeed: string;
+	nonce: number;
 	formula: string;
 	houseEdge: string;
 }

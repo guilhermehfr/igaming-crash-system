@@ -8,6 +8,7 @@ import { GetBetUseCase } from "@application/use-cases/get-bet.use-case";
 import { GetCurrentRoundUseCase } from "@application/use-cases/get-current-round.use-case";
 import { GetRoundHistoryUseCase } from "@application/use-cases/get-round-history.use-case";
 import { PlaceBetUseCase } from "@application/use-cases/place-bet.use-case";
+import { VerifyRoundUseCase } from "@application/use-cases/verify-round.use-case";
 import {
 	Body,
 	Controller,
@@ -20,6 +21,11 @@ import {
 	Query,
 } from "@nestjs/common";
 import type { HealthCheckResponseDto } from "@presentation/dtos/health-check-response.dto";
+import type {
+	ProvablyFairRevealDto,
+	ProvablyFairStatusDto,
+	SetClientSeedDto,
+} from "@presentation/dtos/provably-fair.dto";
 
 @Controller("games")
 export class GamesController {
@@ -30,6 +36,7 @@ export class GamesController {
 		private readonly getRoundHistoryUseCase: GetRoundHistoryUseCase,
 		private readonly getBetUseCase: GetBetUseCase,
 		private readonly roundLifecycleService: RoundLifecycleService,
+		private readonly verifyRoundUseCase: VerifyRoundUseCase,
 	) {}
 
 	@Get("health")
@@ -138,6 +145,47 @@ export class GamesController {
 			}
 
 			return RoundResponseDto.fromDomain(currentRound);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			throw new HttpException(message, HttpStatus.BAD_REQUEST);
+		}
+	}
+
+	@Get("rounds/:roundId/verify")
+	async verifyRound(
+		@Param("roundId") roundId: string,
+	): Promise<ReturnType<typeof this.verifyRoundUseCase.execute>> {
+		try {
+			return await this.verifyRoundUseCase.execute(roundId);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			throw new HttpException(message, HttpStatus.BAD_REQUEST);
+		}
+	}
+
+	@Get("provably-fair")
+	getProvablyFairStatus(): ProvablyFairStatusDto {
+		return {
+			serverSeedHash: this.roundLifecycleService.getServerSeedHash(),
+			clientSeed: this.roundLifecycleService.getClientSeed(),
+			nonce: this.roundLifecycleService.getNonce(),
+		};
+	}
+
+	@Post("provably-fair/reveal")
+	revealServerSeed(): ProvablyFairRevealDto {
+		return this.roundLifecycleService.revealServerSeed();
+	}
+
+	@Post("provably-fair/client-seed")
+	setClientSeed(@Body() body: SetClientSeedDto): ProvablyFairStatusDto {
+		try {
+			this.roundLifecycleService.setClientSeed(body.clientSeed);
+			return {
+				serverSeedHash: this.roundLifecycleService.getServerSeedHash(),
+				clientSeed: this.roundLifecycleService.getClientSeed(),
+				nonce: this.roundLifecycleService.getNonce(),
+			};
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			throw new HttpException(message, HttpStatus.BAD_REQUEST);
