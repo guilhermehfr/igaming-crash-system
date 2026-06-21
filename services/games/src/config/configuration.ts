@@ -18,8 +18,6 @@ export const config = {
 			process.env.CRASH_POINT_OVERRIDE !== undefined
 				? parseFloat(process.env.CRASH_POINT_OVERRIDE)
 				: undefined,
-		serverSecret:
-			process.env.CRASH_SERVER_SECRET || "dev-secret-key-change-in-prod",
 	},
 };
 

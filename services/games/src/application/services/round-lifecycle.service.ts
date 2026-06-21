@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import type { CrashPointGenerator } from "@application/services/crash-point-generator";
 import type {
 	IBetCashedOutEvent,
@@ -29,9 +29,14 @@ export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
 
 	private readonly BETTING_PHASE_DURATION_MS = 5000;
 	private readonly MULTIPLIER_INCREMENT_INTERVAL_MS = 100;
-	private readonly MULTIPLIER_INCREMENT_RATE = 0.01; // 0.01 per 100ms = 100ms per 1x = ~30s to 10x
+	private readonly MULTIPLIER_INCREMENT_RATE = 0.01;
 	private readonly CRASHED_PAUSE_DURATION_MS = 5000;
 	private hasBetBeenPlaced = false;
+
+	private _serverSeed: string;
+	private _serverSeedHash: string;
+	private _clientSeed: string;
+	private _nonce: number;
 
 	constructor(
 		@Inject("IRoundRepository")
@@ -40,13 +45,70 @@ export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
 		private readonly rabbitmqPublisher: RabbitMQPublisherService,
 		@Inject("CrashPointGenerator")
 		private readonly crashPointGenerator: CrashPointGenerator,
-	) {}
+	) {
+		this._serverSeed = this.generateSeed();
+		this._serverSeedHash = this.hashSeed(this._serverSeed);
+		this._clientSeed = this.generateSeed();
+		this._nonce = 1;
+	}
 
 	async onModuleInit(): Promise<void> {
-		// Don't auto-start round - wait for first bet
 		this.logger.log(
 			"Game service ready. Waiting for first bet to start round...",
 		);
+	}
+
+	private generateSeed(): string {
+		return randomBytes(32).toString("hex");
+	}
+
+	private hashSeed(seed: string): string {
+		return createHash("sha256").update(seed).digest("hex");
+	}
+
+	getServerSeedHash(): string {
+		return this._serverSeedHash;
+	}
+
+	getServerSeed(): string {
+		return this._serverSeed;
+	}
+
+	revealServerSeed(): {
+		serverSeed: string;
+		serverSeedHash: string;
+		clientSeed: string;
+		nonce: number;
+	} {
+		const revealed = this._serverSeed;
+
+		this._serverSeed = this.generateSeed();
+		this._serverSeedHash = this.hashSeed(this._serverSeed);
+
+		this.logger.log("Server seed rotated after reveal");
+
+		return {
+			serverSeed: revealed,
+			serverSeedHash: this._serverSeedHash,
+			clientSeed: this._clientSeed,
+			nonce: this._nonce,
+		};
+	}
+
+	getClientSeed(): string {
+		return this._clientSeed;
+	}
+
+	setClientSeed(seed: string): void {
+		if (!seed || seed.trim().length === 0) {
+			throw new Error("Client seed must be non-empty");
+		}
+		this._clientSeed = seed;
+		this.logger.log("Client seed updated");
+	}
+
+	getNonce(): number {
+		return this._nonce;
 	}
 
 	async initializeNewRound(): Promise<void> {
@@ -83,11 +145,20 @@ export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
 		this.logger.log(`Transitioning round ${this.currentRound.id} to RUNNING`);
 
 		try {
-			const seed = `${Date.now()}-${Math.random().toString(36).substr(2, 16)}`;
-			const hash = createHmac("sha256", seed).digest("hex");
+			const combinedSeed = `${this._clientSeed}-${this._nonce}`;
+			const hash = createHmac("sha256", this._serverSeed)
+				.update(combinedSeed)
+				.digest("hex");
 			const crashPointMultiplier = this.crashPointGenerator.generate(hash);
 
-			const crashPoint = CrashPoint.create(crashPointMultiplier, hash, seed);
+			const crashPoint = CrashPoint.create(
+				crashPointMultiplier,
+				hash,
+				this._clientSeed,
+				this._nonce,
+			);
+
+			this._nonce++;
 
 			this.currentRound.setCrashPoint(crashPoint);
 			this.currentRound.startRound();
@@ -154,7 +225,6 @@ export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
 	private async transitionToCrashed(): Promise<void> {
 		if (!this.currentRound) return;
 
-		// Prevent double transition
 		if (this.currentRound.state === "CRASHED") {
 			this.logger.warn("Round already crashed, skipping transition");
 			return;
@@ -228,7 +298,6 @@ export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
 				state: bet.state,
 			});
 
-			// Start timer after FIRST bet is placed (not on round create)
 			if (!this.hasBetBeenPlaced) {
 				this.hasBetBeenPlaced = true;
 				this.startBettingPhase();
@@ -237,7 +306,6 @@ export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
 				);
 			}
 
-			// Publish event (non-blocking - don't throw if fails)
 			try {
 				const betPlacedEvent: IBetPlacedEvent = {
 					type: "bet.placed",
