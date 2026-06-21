@@ -31,7 +31,10 @@ export class RoundTypeormEntity {
 	crashPointHash!: string | null;
 
 	@Column("varchar", { length: 255, nullable: true })
-	crashPointSeed!: string | null;
+	crashPointClientSeed!: string | null;
+
+	@Column("integer", { nullable: true })
+	crashPointNonce!: number | null;
 
 	@CreateDateColumn()
 	bettingStartedAt!: Date;

@@ -3,15 +3,27 @@ import { createHmac } from "node:crypto";
 export class CrashPoint {
 	private readonly _multiplier: number;
 	private readonly _hash: string;
-	private readonly _seed: string;
+	private readonly _clientSeed: string;
+	private readonly _nonce: number;
 
-	private constructor(multiplier: number, hash: string, seed: string) {
+	private constructor(
+		multiplier: number,
+		hash: string,
+		clientSeed: string,
+		nonce: number,
+	) {
 		this._multiplier = multiplier;
 		this._hash = hash;
-		this._seed = seed;
+		this._clientSeed = clientSeed;
+		this._nonce = nonce;
 	}
 
-	static create(multiplier: number, hash: string, seed: string): CrashPoint {
+	static create(
+		multiplier: number,
+		hash: string,
+		clientSeed: string,
+		nonce: number,
+	): CrashPoint {
 		if (multiplier < 1.0) {
 			throw new Error("Crash point multiplier must be at least 1.0");
 		}
@@ -20,15 +32,23 @@ export class CrashPoint {
 			throw new Error("Hash cannot be empty");
 		}
 
-		if (!seed || seed.trim().length === 0) {
-			throw new Error("Seed cannot be empty");
+		if (!clientSeed || clientSeed.trim().length === 0) {
+			throw new Error("Client seed cannot be empty");
 		}
 
-		return new CrashPoint(multiplier, hash, seed);
+		if (nonce < 1) {
+			throw new Error("Nonce must be at least 1");
+		}
+
+		return new CrashPoint(multiplier, hash, clientSeed, nonce);
 	}
 
-	static instantCrash(hash: string, seed: string): CrashPoint {
-		return CrashPoint.create(1.0, hash, seed);
+	static instantCrash(
+		hash: string,
+		clientSeed: string,
+		nonce: number,
+	): CrashPoint {
+		return CrashPoint.create(1.0, hash, clientSeed, nonce);
 	}
 
 	get multiplier(): number {
@@ -39,8 +59,12 @@ export class CrashPoint {
 		return this._hash;
 	}
 
-	get seed(): string {
-		return this._seed;
+	get clientSeed(): string {
+		return this._clientSeed;
+	}
+
+	get nonce(): number {
+		return this._nonce;
 	}
 
 	isInstantCrash(): boolean {
@@ -51,10 +75,11 @@ export class CrashPoint {
 		return currentMultiplier >= this._multiplier;
 	}
 
-	verifyProvablyFair(serverSecret: string): boolean {
+	verifyProvablyFair(serverSeed: string): boolean {
 		try {
-			const computedHash = createHmac("sha256", serverSecret)
-				.update(this._seed)
+			const combinedSeed = `${this._clientSeed}-${this._nonce}`;
+			const computedHash = createHmac("sha256", serverSeed)
+				.update(combinedSeed)
 				.digest("hex");
 
 			if (computedHash !== this._hash) {
@@ -80,7 +105,8 @@ export class CrashPoint {
 		return (
 			this._multiplier === other._multiplier &&
 			this._hash === other._hash &&
-			this._seed === other._seed
+			this._clientSeed === other._clientSeed &&
+			this._nonce === other._nonce
 		);
 	}
 
