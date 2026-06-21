@@ -91,7 +91,8 @@ export class RoundRepository implements IRoundRepository {
 		if (round.crashPoint) {
 			entity.crashPointMultiplier = round.crashPoint.multiplier;
 			entity.crashPointHash = round.crashPoint.hash;
-			entity.crashPointSeed = round.crashPoint.seed;
+			entity.crashPointClientSeed = round.crashPoint.clientSeed;
+			entity.crashPointNonce = round.crashPoint.nonce;
 		}
 
 		entity.bettingStartedAt = round.bettingStartedAt;
@@ -123,12 +124,14 @@ export class RoundRepository implements IRoundRepository {
 		if (
 			entity.crashPointMultiplier !== null &&
 			entity.crashPointHash &&
-			entity.crashPointSeed
+			entity.crashPointClientSeed &&
+			entity.crashPointNonce !== null
 		) {
 			crashPoint = CrashPoint.create(
 				entity.crashPointMultiplier,
 				entity.crashPointHash,
-				entity.crashPointSeed,
+				entity.crashPointClientSeed,
+				entity.crashPointNonce,
 			);
 		}
 

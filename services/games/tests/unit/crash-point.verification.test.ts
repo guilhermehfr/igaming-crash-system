@@ -1,83 +1,116 @@
-import { describe, it, expect } from "bun:test";
-import { CrashPoint } from "../../src/domain/crash-point.vo";
+import { describe, expect, it } from "bun:test";
 import { createHmac, randomBytes } from "node:crypto";
+import { CrashPoint } from "../../src/domain/crash-point.vo";
 
 describe("CrashPoint Provably Fair Verification", () => {
-	const serverSecret = "dev-secret-key-change-in-prod";
+	const clientSeed = "test-client-seed";
+	const nonce = 1;
 
-	it("should verify a valid crash point", () => {
-		// Generate a valid crash point
-		const seed = randomBytes(16).toString("hex");
-		const hmac = createHmac("sha256", serverSecret);
-		hmac.update(seed);
-		const hash = hmac.digest("hex");
+	function generateCrashPoint(serverSeed: string) {
+		const combinedSeed = `${clientSeed}-${nonce}`;
+		const hash = createHmac("sha256", serverSeed)
+			.update(combinedSeed)
+			.digest("hex");
 
 		const h = parseInt(hash.slice(0, 8), 16);
 		const e = 2 ** 32;
 		const multiplier =
 			h % 100 === 0 ? 1.0 : Math.floor((100 * e - h) / (e - h)) / 100;
 
-		// Create crash point
-		const crashPoint = CrashPoint.create(multiplier, hash, seed);
+		return { multiplier, hash, serverSeed };
+	}
 
-		// Verify it
-		const isValid = crashPoint.verifyProvablyFair(serverSecret);
+	it("should verify a valid crash point", () => {
+		const serverSeed = randomBytes(32).toString("hex");
+		const { multiplier, hash } = generateCrashPoint(serverSeed);
+
+		const crashPoint = CrashPoint.create(multiplier, hash, clientSeed, nonce);
+
+		const isValid = crashPoint.verifyProvablyFair(serverSeed);
 		expect(isValid).toBe(true);
 	});
 
 	it("should detect tampered hash", () => {
-		const seed = randomBytes(16).toString("hex");
-		const hmac = createHmac("sha256", serverSecret);
-		hmac.update(seed);
-		const hash = hmac.digest("hex");
+		const serverSeed = randomBytes(32).toString("hex");
+		const { multiplier, hash } = generateCrashPoint(serverSeed);
 
-		// Tamper with hash (flip a bit)
 		const tamperedHash =
 			(parseInt(hash.slice(0, 8), 16) ^ 1).toString(16).padStart(8, "0") +
 			hash.slice(8);
 
-		const e = 2 ** 32;
-		const h = parseInt(hash.slice(0, 8), 16);
-		const multiplier =
-			h % 100 === 0 ? 1.0 : Math.floor((100 * e - h) / (e - h)) / 100;
+		const crashPoint = CrashPoint.create(
+			multiplier,
+			tamperedHash,
+			clientSeed,
+			nonce,
+		);
 
-		// Create crash point with tampered hash
-		const crashPoint = CrashPoint.create(multiplier, tamperedHash, seed);
-
-		// Verification should fail
-		const isValid = crashPoint.verifyProvablyFair(serverSecret);
+		const isValid = crashPoint.verifyProvablyFair(serverSeed);
 		expect(isValid).toBe(false);
 	});
 
+	it("should fail with wrong server seed", () => {
+		const serverSeed = randomBytes(32).toString("hex");
+		const { multiplier, hash } = generateCrashPoint(serverSeed);
+
+		const crashPoint = CrashPoint.create(multiplier, hash, clientSeed, nonce);
+
+		const wrongServerSeed = randomBytes(32).toString("hex");
+		expect(crashPoint.verifyProvablyFair(wrongServerSeed)).toBe(false);
+	});
+
+	it("should fail with wrong client seed", () => {
+		const serverSeed = randomBytes(32).toString("hex");
+		const { multiplier, hash } = generateCrashPoint(serverSeed);
+
+		const crashPoint = CrashPoint.create(multiplier, hash, clientSeed, nonce);
+
+		const wrongClientSeed = "wrong-client-seed";
+		const wrongCombinedSeed = `${wrongClientSeed}-${nonce}`;
+		const wrongHash = createHmac("sha256", serverSeed)
+			.update(wrongCombinedSeed)
+			.digest("hex");
+		const h = parseInt(wrongHash.slice(0, 8), 16);
+		const e = 2 ** 32;
+		const wrongMultiplier =
+			h % 100 === 0 ? 1.0 : Math.floor((100 * e - h) / (e - h)) / 100;
+
+		const wrongCp = CrashPoint.create(
+			wrongMultiplier,
+			wrongHash,
+			wrongClientSeed,
+			nonce,
+		);
+
+		expect(crashPoint.verifyProvablyFair(serverSeed)).toBe(true);
+		expect(wrongCp.verifyProvablyFair(serverSeed)).toBe(true);
+		expect(crashPoint.equals(wrongCp)).toBe(false);
+	});
+
 	it("should detect instant crash correctly", () => {
-		// Generate seeds until we get an instant crash
 		let found = false;
-		let seed = "";
 		let hash = "";
 		let h = 0;
 
-		// Try up to 10000 seeds to find one with instant crash
 		for (let i = 0; i < 10000 && !found; i++) {
-			seed = randomBytes(16).toString("hex");
-			const hmac = createHmac("sha256", serverSecret);
-			hmac.update(seed);
-			hash = hmac.digest("hex");
+			const serverSeed = randomBytes(32).toString("hex");
+			const combinedSeed = `${clientSeed}-${nonce}`;
+			hash = createHmac("sha256", serverSeed)
+				.update(combinedSeed)
+				.digest("hex");
 
 			h = parseInt(hash.slice(0, 8), 16);
 			if (h % 100 === 0) {
 				found = true;
+				const crashPoint = CrashPoint.create(1.0, hash, clientSeed, nonce);
+				const isValid = crashPoint.verifyProvablyFair(serverSeed);
+				expect(isValid).toBe(true);
+				expect(crashPoint.isInstantCrash()).toBe(true);
 				break;
 			}
 		}
 
-		if (found) {
-			// Create instant crash crash point (1.0x)
-			const crashPoint = CrashPoint.create(1.0, hash, seed);
-			const isValid = crashPoint.verifyProvablyFair(serverSecret);
-			expect(isValid).toBe(true);
-			expect(crashPoint.isInstantCrash()).toBe(true);
-		} else {
-			// If we couldn't find an instant crash in 10000 tries, skip
+		if (!found) {
 			console.log(
 				"Skipped instant crash test (probability ~1%, didn't hit it in 10000 tries)",
 			);
@@ -85,31 +118,29 @@ describe("CrashPoint Provably Fair Verification", () => {
 	});
 
 	it("should handle edge cases", () => {
-		const seed = "test-seed-12345";
-		const hmac = createHmac("sha256", serverSecret);
-		hmac.update(seed);
-		const hash = hmac.digest("hex");
+		const serverSeed = "test-server-seed-12345";
+		const combinedSeed = `${clientSeed}-${nonce}`;
+		const hash = createHmac("sha256", serverSeed)
+			.update(combinedSeed)
+			.digest("hex");
 
 		const h = parseInt(hash.slice(0, 8), 16);
 		const e = 2 ** 32;
 		const multiplier =
 			h % 100 === 0 ? 1.0 : Math.floor((100 * e - h) / (e - h)) / 100;
 
-		const crashPoint = CrashPoint.create(multiplier, hash, seed);
+		const crashPoint = CrashPoint.create(multiplier, hash, clientSeed, nonce);
 
-		// Should verify correctly
-		expect(crashPoint.verifyProvablyFair(serverSecret)).toBe(true);
+		expect(crashPoint.verifyProvablyFair(serverSeed)).toBe(true);
 
-		// Should fail with wrong secret
-		expect(crashPoint.verifyProvablyFair("wrong-secret")).toBe(false);
+		expect(crashPoint.verifyProvablyFair("wrong-server-seed")).toBe(false);
 
-		// Should reject multiplier < 1.0
-		expect(() => CrashPoint.create(0.5, hash, seed)).toThrow();
+		expect(() => CrashPoint.create(0.5, hash, clientSeed, nonce)).toThrow();
 
-		// Should reject empty hash
-		expect(() => CrashPoint.create(1.5, "", seed)).toThrow();
+		expect(() => CrashPoint.create(1.5, "", clientSeed, nonce)).toThrow();
 
-		// Should reject empty seed
-		expect(() => CrashPoint.create(1.5, hash, "")).toThrow();
+		expect(() => CrashPoint.create(1.5, hash, "", nonce)).toThrow();
+
+		expect(() => CrashPoint.create(1.5, hash, clientSeed, 0)).toThrow();
 	});
 });

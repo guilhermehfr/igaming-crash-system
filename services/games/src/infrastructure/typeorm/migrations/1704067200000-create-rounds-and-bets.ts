@@ -44,9 +44,14 @@ export class CreateRoundsAndBets1704067200000 implements MigrationInterface {
 						isNullable: true,
 					},
 					{
-						name: "crashPointSeed",
+						name: "crashPointClientSeed",
 						type: "varchar",
 						length: "255",
+						isNullable: true,
+					},
+					{
+						name: "crashPointNonce",
+						type: "integer",
 						isNullable: true,
 					},
 					{

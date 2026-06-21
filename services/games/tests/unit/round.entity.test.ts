@@ -1,11 +1,11 @@
-import { describe, it, expect } from "bun:test";
-import {
-	Round,
-	RoundState,
-	InvalidStateTransitionError,
-} from "../../src/domain/round.entity";
+import { describe, expect, it } from "bun:test";
 import { Bet, BetState } from "../../src/domain/bet.entity";
 import { CrashPoint } from "../../src/domain/crash-point.vo";
+import {
+	InvalidStateTransitionError,
+	Round,
+	RoundState,
+} from "../../src/domain/round.entity";
 
 describe("Round Entity", () => {
 	describe("State Machine", () => {
@@ -18,7 +18,7 @@ describe("Round Entity", () => {
 
 		it("should transition BETTING -> RUNNING", () => {
 			const round = Round.create("test-round-1");
-			const crashPoint = CrashPoint.create(2.5, "hash123", "seed123");
+			const crashPoint = CrashPoint.create(2.5, "hash123", "client123", 1);
 
 			round.setCrashPoint(crashPoint);
 			round.startRound();
@@ -29,7 +29,7 @@ describe("Round Entity", () => {
 
 		it("should transition RUNNING -> CRASHED after hasCrashed", () => {
 			const round = Round.create("test-round-1");
-			const crashPoint = CrashPoint.create(2.0, "hash123", "seed123");
+			const crashPoint = CrashPoint.create(2.0, "hash123", "client123", 1);
 
 			round.setCrashPoint(crashPoint);
 			round.startRound();
@@ -48,7 +48,7 @@ describe("Round Entity", () => {
 
 		it("should not allow direct state transition to BETTING after RUNNING", () => {
 			const round = Round.create("test-round-1");
-			const crashPoint = CrashPoint.create(2.0, "hash123", "seed123");
+			const crashPoint = CrashPoint.create(2.0, "hash123", "client123", 1);
 
 			round.setCrashPoint(crashPoint);
 			round.startRound();
@@ -59,7 +59,7 @@ describe("Round Entity", () => {
 
 		it("should throw when placing bet in RUNNING state", () => {
 			const round = Round.create("test-round-1");
-			const crashPoint = CrashPoint.create(2.0, "hash123", "seed123");
+			const crashPoint = CrashPoint.create(2.0, "hash123", "client123", 1);
 			const bet = Bet.create("bet-1", "test-round-1", "user-1", 1000n);
 
 			round.setCrashPoint(crashPoint);
@@ -70,7 +70,7 @@ describe("Round Entity", () => {
 
 		it("should throw when placing bet in CRASHED state", () => {
 			const round = Round.create("test-round-1");
-			const crashPoint = CrashPoint.create(2.0, "hash123", "seed123");
+			const crashPoint = CrashPoint.create(2.0, "hash123", "client123", 1);
 			const bet = Bet.create("bet-1", "test-round-1", "user-1", 1000n);
 
 			round.setCrashPoint(crashPoint);
@@ -109,7 +109,7 @@ describe("Round Entity", () => {
 
 		it("should cash out bet in RUNNING state", () => {
 			const round = Round.create("test-round-1");
-			const crashPoint = CrashPoint.create(5.0, "hash123", "seed123");
+			const crashPoint = CrashPoint.create(5.0, "hash123", "client123", 1);
 			const bet = Bet.create("bet-1", "test-round-1", "user-1", 1000n);
 
 			round.placeBet(bet);
@@ -125,7 +125,7 @@ describe("Round Entity", () => {
 
 		it("should throw when cashing out non-existent bet", () => {
 			const round = Round.create("test-round-1");
-			const crashPoint = CrashPoint.create(5.0, "hash123", "seed123");
+			const crashPoint = CrashPoint.create(5.0, "hash123", "client123", 1);
 
 			round.setCrashPoint(crashPoint);
 			round.startRound();
@@ -135,7 +135,7 @@ describe("Round Entity", () => {
 
 		it("should auto-liquidate pending bets on crash", () => {
 			const round = Round.create("test-round-1");
-			const crashPoint = CrashPoint.create(2.0, "hash123", "seed123");
+			const crashPoint = CrashPoint.create(2.0, "hash123", "client123", 1);
 			const bet1 = Bet.create("bet-1", "test-round-1", "user-1", 1000n);
 			const bet2 = Bet.create("bet-2", "test-round-1", "user-2", 2000n);
 
@@ -159,7 +159,7 @@ describe("Round Entity", () => {
 	describe("Multiplier", () => {
 		it("should update multiplier in RUNNING state", () => {
 			const round = Round.create("test-round-1");
-			const crashPoint = CrashPoint.create(5.0, "hash123", "seed123");
+			const crashPoint = CrashPoint.create(5.0, "hash123", "client123", 1);
 
 			round.setCrashPoint(crashPoint);
 			round.startRound();
@@ -179,7 +179,7 @@ describe("Round Entity", () => {
 
 		it("should detect crash when multiplier >= crashPoint", () => {
 			const round = Round.create("test-round-1");
-			const crashPoint = CrashPoint.create(2.0, "hash123", "seed123");
+			const crashPoint = CrashPoint.create(2.0, "hash123", "client123", 1);
 
 			round.setCrashPoint(crashPoint);
 			round.startRound();
@@ -209,7 +209,7 @@ describe("Round Entity", () => {
 
 		it("should calculate total winnings", () => {
 			const round = Round.create("test-round-1");
-			const crashPoint = CrashPoint.create(5.0, "hash123", "seed123");
+			const crashPoint = CrashPoint.create(5.0, "hash123", "client123", 1);
 			const bet1 = Bet.create("bet-1", "test-round-1", "user-1", 1000n);
 			const bet2 = Bet.create("bet-2", "test-round-1", "user-2", 2000n);
 
@@ -226,7 +226,7 @@ describe("Round Entity", () => {
 
 		it("should calculate house result after crash", () => {
 			const round = Round.create("test-round-1");
-			const crashPoint = CrashPoint.create(5.0, "hash123", "seed123");
+			const crashPoint = CrashPoint.create(5.0, "hash123", "client123", 1);
 			const bet1 = Bet.create("bet-1", "test-round-1", "user-1", 1000n);
 			const bet2 = Bet.create("bet-2", "test-round-1", "user-2", 2000n);
 

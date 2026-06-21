@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import http from "node:http";
 
 const GAMES_URL = "http://localhost:4001";
