@@ -1,5 +1,7 @@
 # Igaming Crash System
 
+> **🇧🇷 Leia em português:** [README-pt-br.md](README-pt-br.md)
+
 Real-time multiplayer game system based on the "crash game" model. Players place bets before each round and must cash out before the multiplier collapses.
 
 ## Stack
@@ -209,6 +211,11 @@ bun run docker:up
 ```
 
 This command boots up the entire stack automatically (databases, services, gateway, auth, and messaging).
+
+For production (no direct service ports — traffic only through Kong):
+```bash
+bun docker:up:prod
+```
 
 ---
 

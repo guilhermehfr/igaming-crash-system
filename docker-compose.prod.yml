@@ -1,0 +1,10 @@
+services:
+  kong:
+    environment:
+      KONG_DECLARATIVE_CONFIG: /kong/kong.prod.yml
+
+  games:
+    ports: []
+
+  wallets:
+    ports: []

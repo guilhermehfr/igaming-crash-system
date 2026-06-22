@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "docker:up": "docker compose up",
+    "docker:up:prod": "docker compose -f docker-compose.yml -f docker-compose.prod.yml up",
     "docker:down": "docker compose down",
     "docker:reset": "docker compose down -v --rmi all --remove-orphans"
   },

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **iGaming Crash System** is a microservices-based betting platform with an explicit state machine for crash game rounds. The codebase uses **Domain-Driven Design (DDD)** and **Hexagonal Architecture** with **Bun** as the runtime and **NestJS** as the application framework.
 
-**Status**: Domain layer ✅ complete (1,247 lines). Application layer ✅ complete (824 lines games + 376 lines wallets). Infrastructure layer ✅ complete (841 lines). Docker environment ✅ operational. Presentation layer: Games ✅ (11 endpoints), Wallets ✅ (5 endpoints). Provably Fair ✅ complete (HMAC seed chain, 4 API endpoints, server seed rotation). Testing ✅ complete (69 tests: 48 unit + 21 E2E).
+**Status**: Domain layer ✅ complete (1,247 lines). Application layer ✅ complete (824 lines games + 376 lines wallets). Infrastructure layer ✅ complete (841 lines). Docker environment ✅ operational. Presentation layer: Games ✅ (11 endpoints), Wallets ✅ (5 endpoints). Provably Fair ✅ complete (HMAC seed chain, 4 API endpoints, server seed rotation). Testing ✅ complete (140 tests: 106 unit + 34 E2E). No TODOs remaining.
 
 ## Core Architecture
 
@@ -315,6 +315,28 @@ interface IWalletRepository {
 - **Fix**: Added `/socket.io` routes to both `kong.dev.yml` and `kong.prod.yml`. Updated Vite proxy with `ws: true` for `/socket.io`. Changed frontend WS connection to same-origin (through Vite proxy → Kong).
 - **Files**: `docker/kong/kong.*.yml`, `frontend/vite.config.ts`, `frontend/README.md`
 
+### Production Hardening (2026-06-22)
+
+**1. DATABASE_URL Parsing**
+- **Problem**: Render/Railway provide a single `DATABASE_URL` env var, not individual DB_* vars.
+- **Solution**: Added `parseDatabaseUrl()` to both services' `configuration.ts` — if `DATABASE_URL` is set, it extracts host, port, user, password, db name from the connection string and overrides individual DB_* defaults.
+- **Files**: `services/games/src/config/configuration.ts`, `services/wallets/src/config/configuration.ts`
+
+**2. PostgreSQL SSL**
+- **Problem**: Render/Railway require SSL connections to PostgreSQL; TypeORM was configured without SSL.
+- **Solution**: Added `database.ssl` config flag (reads `DB_SSL` env var). When `true`, TypeORM receives `ssl: { rejectUnauthorized: false }`.
+- **Files**: `services/games/src/app.module.ts`, `services/wallets/src/app.module.ts`
+
+**3. CORS for Production**
+- **Problem**: In production, the frontend origin differs from the API origin; requests were blocked by CORS.
+- **Solution**: Added `cors.origin` to configuration. When `NODE_ENV=production`, `main.ts` enables CORS with the configured origin. Dev mode remains unrestricted.
+- **Files**: `services/games/src/main.ts`, `services/wallets/src/main.ts`
+
+**4. Production Docker Compose**
+- **Problem**: `docker-compose.yml` exposed service ports and used dev Kong config (no JWT) — unsafe for production.
+- **Solution**: Created `docker-compose.prod.yml` that overrides Kong config to `kong.prod.yml` (JWT enforced) and clears direct ports from games/wallets. Run with `bun docker:up:prod`.
+- **Files**: `docker-compose.prod.yml`, `package.json`
+
 ## Technology Stack
 
 - **Runtime**: Bun 1.x (Alpine Docker image)
@@ -341,12 +363,14 @@ Both services have a `src/config/configuration.ts` that reads all `process.env.*
 | `DB_USER` | games, wallets | `admin` | PostgreSQL user |
 | `DB_PASS` | games, wallets | `admin` | PostgreSQL password |
 | `DB_NAME` | games, wallets | `games` / `wallets` | PostgreSQL database name |
+| `DB_SSL` | games, wallets | `false` | Enable SSL for PostgreSQL connection (required on Render/Railway) |
 | `RABBITMQ_URL` | games, wallets | `amqp://admin:admin@localhost:5672` | RabbitMQ connection string |
 | `CRASH_POINT_OVERRIDE` | games | (unset) | Forces crash point to this value (testing only) |
 | `VITE_API_URL` | frontend | `""` | API base URL (empty = same-origin via Vite proxy) |
 | `VITE_WS_URL` | frontend | `""` | WebSocket server URL (empty = same-origin via proxy → Kong) |
 | `FRONTEND_URL` | kong (Docker) | `"http://localhost:5173"` | CORS origin for Kong production config |
-| `DATABASE_URL` | — | — | **Dead var** — documented but never consumed by code |
+| `CORS_ORIGIN` | games, wallets | — | Allowed CORS origin when `NODE_ENV=production` |
+| `DATABASE_URL` | games, wallets | — | Connection string (overrides DB_HOST/DB_PORT/DB_USER/DB_PASS/DB_NAME; parsed by configuration.ts) |
 
 ## Reliability
 
@@ -403,6 +427,9 @@ cd services/wallets && bun test tests/unit
 # All Wallets tests
 cd services/wallets && bun test
 
+# Wallets E2E tests
+cd services/wallets && bun test tests/e2e
+
 # All tests with coverage
 cd services/games && bun test --coverage
 
@@ -415,6 +442,9 @@ cd services/games && bun test --watch
 ```bash
 # Start full stack (Postgres, RabbitMQ, Keycloak, Kong, services)
 bun docker:up
+
+# Start in production mode (Kong JWT auth, no direct service ports)
+bun docker:up:prod
 
 # Stop all containers
 bun docker:down
@@ -876,5 +906,5 @@ If a Round is stuck or has unexpected behavior:
 **Presentation Layer Status**: ✅ Complete (Games: 11 endpoints, Wallets: 5 endpoints)  
 **RabbitMQ Integration**: ✅ Complete (Games → Wallets async communication)  
 **Docker Environment**: ✅ Operational (PostgreSQL, RabbitMQ, Keycloak, Kong)  
-**Testing Status**: ✅ Complete (69 tests: 48 unit + 21 E2E)  
+**Testing Status**: ✅ Complete (140 tests: 106 unit + 34 E2E)  
 **Repository**: https://github.com/guilhermehfr/igaming-crash-system
