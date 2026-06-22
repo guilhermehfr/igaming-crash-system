@@ -19,6 +19,15 @@ async function bootstrap(): Promise<void> {
 
 	SwaggerModule.setup("api", app, document);
 
+	if (config.nodeEnv === "production") {
+		app.enableCors({
+			origin: config.cors.origin,
+			methods: ["GET", "POST", "OPTIONS"],
+			allowedHeaders: ["Authorization", "Content-Type", "X-User-Id"],
+			credentials: true,
+		});
+	}
+
 	await app.listen(config.port, "0.0.0.0");
 
 	console.log(`Games service running on port ${config.port}`);

@@ -23,6 +23,7 @@ import { config } from '@config/configuration'
       username: config.database.user,
       password: config.database.pass,
       database: config.database.name,
+      ssl: config.database.ssl ? { rejectUnauthorized: false } : false,
       entities: [WalletTypeormEntity, ConsumedEventTypeormEntity],
       migrations: ['dist/infrastructure/typeorm/migrations/*.js'],
       migrationsRun: true,

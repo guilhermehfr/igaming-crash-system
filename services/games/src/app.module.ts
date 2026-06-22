@@ -29,6 +29,7 @@ import { GamesGateway } from "@presentation/gateway/games.gateway";
 			username: config.database.user,
 			password: config.database.pass,
 			database: config.database.name,
+			ssl: config.database.ssl ? { rejectUnauthorized: false } : false,
 			entities: [RoundTypeormEntity, BetTypeormEntity],
 			migrations: ["dist/infrastructure/typeorm/migrations/*.js"],
 			migrationsRun: true,
