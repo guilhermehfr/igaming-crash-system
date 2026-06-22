@@ -58,6 +58,7 @@ services:
       - "8443:8443"
       - "8001:8001"
     environment:
+      FRONTEND_URL: "http://localhost:5173"
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /kong/kong.dev.yml
       # TODO (production): switch to /kong/kong.prod.yml and remove service ports below

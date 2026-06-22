@@ -18,6 +18,10 @@ services:
         paths:
           - /games
         strip_path: false
+      - name: games-ws-routes
+        paths:
+          - /socket.io
+        strip_path: false
 
   - name: wallets-service
     url: http://wallets:4002
