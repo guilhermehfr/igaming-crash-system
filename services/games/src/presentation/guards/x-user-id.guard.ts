@@ -4,7 +4,9 @@ import {
 	HttpException,
 	HttpStatus,
 	Injectable,
+	UnauthorizedException,
 } from "@nestjs/common";
+import { config } from "@config/configuration";
 
 @Injectable()
 export class XUserIdGuard implements CanActivate {
@@ -12,6 +14,15 @@ export class XUserIdGuard implements CanActivate {
 		const req = context.switchToHttp().getRequest<Record<string, unknown>>();
 		const headers = req.headers as Record<string, string | undefined>;
 		const userId = headers["x-user-id"];
+
+		if (config.nodeEnv === "production") {
+			const gatewayAuth = headers["x-gateway-authenticated"];
+			if (gatewayAuth !== "true") {
+				throw new UnauthorizedException(
+					"Request must go through API gateway",
+				);
+			}
+		}
 
 		if (!userId) {
 			throw new HttpException(
