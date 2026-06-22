@@ -229,7 +229,7 @@ interface IWalletRepository {
 
 7. **Bet Aggregation**: Round contains all bets; calculations use aggregate functions (`calculateTotalWagered`, `calculateHouseResult`).
 
-8. **Auth via X-User-Id Header**: Kong validates JWT and injects `X-User-Id` header with user's `sub` claim. `XUserIdGuard` ensures header presence on controllers; use cases trust this identity. No manual header parsing in actions.
+8. **Auth via X-User-Id Header**: Two Kong configs — `kong.dev.yml` passes `X-User-Id` through without JWT; `kong.prod.yml` validates JWT globally, strips any client-provided `X-User-Id`, and injects trusted `X-User-Id` + `X-Gateway-Authenticated: true`. `XUserIdGuard` on guarded endpoints checks header presence; in production it also requires `X-Gateway-Authenticated` to prevent spoofing. No manual header parsing in actions.
 
 9. **Centralized Configuration**: `services/*/src/config/configuration.ts` reads all `process.env.*` vars with defaults and exports a typed `config` object imported by services, use cases, and main.ts.
 
@@ -639,7 +639,7 @@ Infrastructure layer:
 - Logging on all use case executions (debug on entry, log/error on result)
 - Bet ID generation: `bet-{timestamp}-{random}` (9-char alphanumeric)
 - Amount precision: Convert mainUnit to centavos via `BigInt(Math.round(amount * 100))`
-- `XUserIdGuard` at class level on `GamesController`: validates `X-User-Id` header, sets `req.userId` for use case consumption
+- `XUserIdGuard` on guarded endpoints (`placeBet`, `cashOut`, wallet CRUD): validates `X-User-Id` header, sets `req.userId` for use case consumption. In production (`NODE_ENV === "production"`), also requires `X-Gateway-Authenticated: true` — only Kong can inject this header.
 
 ### Infrastructure Layer (✅ Complete - 841 lines)
 - **Location**: `services/*/src/infrastructure/typeorm/`
@@ -742,7 +742,8 @@ Expected inter-service communication:
 
 ### Keycloak Integration
 
-- All endpoints should require JWT token from Keycloak
+- Kong dev config (`kong.dev.yml`): no JWT required; `X-User-Id` passed through directly for development
+- Kong prod config (`kong.prod.yml`): JWT required globally; client-provided identity headers stripped; trusted `X-User-Id` + `X-Gateway-Authenticated` injected
 - Extract `sub` (user ID) from token claims
 - Realm: `crash-game`, Client: `crash-game-client`
 - Test user: `player` / `player123`

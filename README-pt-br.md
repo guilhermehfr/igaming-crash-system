@@ -203,7 +203,7 @@ Este comando inicializa toda a stack automaticamente (bancos, serviços, gateway
 - Consistência eventual aplicada estritamente no fluxo financeiro
 - Máquina de estados explícita no aggregate Round para lógica do jogo
 - Kong injeta o header `X-User-Id` a partir da claim `sub` do JWT; serviços confiam neste header
-- Guard `XUserIdGuard` garante presença do header em todos os endpoints
+- Guard `XUserIdGuard` garante presença do header em endpoints protegidos (apostas, cash-out, wallets); health e endpoints somente leitura são públicos
 
 ## Documentação da API
 

@@ -94,7 +94,7 @@ Precision via BigInt (centavos = 1/100 of main unit, no floating-point errors).
 - Realm: `crash-game`, Client: `crash-game-client`
 - Health checks are not exposed via Kong; use service ports directly
 - Kong injects `X-User-Id` header from JWT `sub` claim; services trust this header for user identity
-- `XUserIdGuard` enforces `X-User-Id` presence on all games and wallets endpoints
+- `XUserIdGuard` enforces `X-User-Id` presence on guarded endpoints (place bet, cash-out, wallets); health and read-only endpoints are public
 
 ---
 
