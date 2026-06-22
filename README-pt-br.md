@@ -25,7 +25,7 @@ O sistema segue **Domain-Driven Design (DDD)** e **Arquitetura Hexagonal** com s
 |---------|-------|-----------|
 | **Games** | 4001 | Rodadas do jogo crash com máquina de estados (BETTING → RUNNING → CRASHED) |
 | **Wallets** | 4002 | Saldo de usuários com precisão monetária (BigInt) |
-| **Kong** | 8000 | API Gateway (rotas /games → 4001, /wallets → 4002) |
+| **Kong** | 8000 | API Gateway (rotas /games → 4001, /wallets → 4002, /socket.io → 4001 WS) |
 | **Keycloak** | 8080 | Provedor de Identidade (OAuth2/OIDC) |
 | **RabbitMQ** | 5672 | Message broker para comunicação assíncrona entre serviços |
 
@@ -97,7 +97,7 @@ Precisão via BigInt (centavos = 1/100 da unidade principal, sem erros de ponto 
 
 ## Tempo Real
 
-WebSockets para sincronização de rodadas (serviço Games na porta 4001).
+WebSockets para sincronização de rodadas. O tráfego passa pelo Kong (`/socket.io` → `:8000` → Games `:4001`). Em desenvolvimento, o proxy do Vite faz o encaminhamento WS de mesma origem para o Kong.
 
 ### Eventos
 
@@ -156,7 +156,7 @@ Todas as rotas expostas via Kong (porta 8000).
 
 ## Testes
 
-- **188 testes no total**: 172 unitários + 16 E2E
+- **69 testes no total**: 48 unitários + 21 E2E
 - Framework de testes nativo do Bun
 - Camada de domínio extensivamente testada
 - Use cases da camada de aplicação testados
@@ -179,6 +179,12 @@ Todas as rotas expostas via Kong (porta 8000).
 │           ├── application/      # Use cases, DTOs
 │           ├── infrastructure/  # Entidades TypeORM, repositories
 │           └── presentation/    # Controllers REST
+├── frontend/
+│   └── src/
+│       ├── App.tsx              # Componente raiz React
+│       ├── main.tsx             # Ponto de entrada
+│       ├── config.ts            # Config de variáveis de ambiente
+│       └── index.css            # Import do Tailwind
 ├── docker/
 └── docker-compose.yml
 ```
