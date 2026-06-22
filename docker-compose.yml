@@ -59,7 +59,8 @@ services:
       - "8001:8001"
     environment:
       KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_DECLARATIVE_CONFIG: /kong/kong.dev.yml
+      # TODO (production): switch to /kong/kong.prod.yml and remove service ports below
       KONG_PLUGINS: "bundled"
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
@@ -84,7 +85,7 @@ services:
       context: .
       dockerfile: ./services/games/Dockerfile
     ports:
-      - "4001:4001"
+      - "4001:4001"  # TODO (production): remove this line — services should only be reachable via Kong
     env_file:
       - ./services/games/.env
     environment:
@@ -109,7 +110,7 @@ services:
       context: .
       dockerfile: ./services/wallets/Dockerfile
     ports:
-      - "4002:4002"
+      - "4002:4002"  # TODO (production): remove this line — services should only be reachable via Kong
     env_file:
       - ./services/wallets/.env
     environment:

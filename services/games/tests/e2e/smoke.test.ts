@@ -135,7 +135,7 @@ describe("E2E Smoke Test - Distributed System Integration", () => {
 				`${GAMES_URL}/games/bets/${betId}/cash-out`,
 				{
 					method: "POST",
-					headers: { "Content-Type": "application/json" },
+				headers: { "Content-Type": "application/json", "X-User-Id": userId },
 					body: JSON.stringify({ multiplier: MULTIPLIER }),
 				},
 			);

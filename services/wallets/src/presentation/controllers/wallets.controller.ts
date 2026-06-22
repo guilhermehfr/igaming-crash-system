@@ -10,7 +10,6 @@ import { WalletResponseDto } from '@application/dtos/wallet-response';
 import type { HealthCheckResponseDto } from '@presentation/dtos/health-check-response.dto';
 
 @Controller('wallets')
-@UseGuards(XUserIdGuard)
 export class WalletsController {
   constructor(
     private readonly createWalletUseCase: CreateWalletUseCase,
@@ -25,6 +24,7 @@ export class WalletsController {
   }
 
   @Post()
+  @UseGuards(XUserIdGuard)
   async createWallet(
     @Req() req: Record<string, unknown>,
     @Body() body: { initialBalanceInMainUnit?: number; userId?: string },
@@ -38,11 +38,13 @@ export class WalletsController {
   }
 
   @Get(':userId')
+  @UseGuards(XUserIdGuard)
   async getWallet(@Req() req: Record<string, unknown>): Promise<WalletResponseDto> {
     return await this.getWalletUseCase.execute(req.userId as string);
   }
 
   @Post(':userId/debit')
+  @UseGuards(XUserIdGuard)
   async debitWallet(
     @Req() req: Record<string, unknown>,
     @Body() body: { amountInMainUnit: number },
@@ -51,6 +53,7 @@ export class WalletsController {
   }
 
   @Post(':userId/credit')
+  @UseGuards(XUserIdGuard)
   async creditWallet(
     @Req() req: Record<string, unknown>,
     @Body() body: { amountInMainUnit: number },

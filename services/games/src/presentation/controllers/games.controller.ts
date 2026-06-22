@@ -30,7 +30,6 @@ import type {
 } from "@presentation/dtos/provably-fair.dto";
 
 @Controller("games")
-@UseGuards(XUserIdGuard)
 export class GamesController {
 	constructor(
 		private readonly placeBetUseCase: PlaceBetUseCase,
@@ -48,6 +47,7 @@ export class GamesController {
 	}
 
 	@Post("bets")
+	@UseGuards(XUserIdGuard)
 	async placeBet(
 		@Req() req: Record<string, unknown>,
 		@Body() body: { amountInMainUnit: number; userId?: string },
@@ -74,6 +74,7 @@ export class GamesController {
 	}
 
 	@Post("bets/:betId/cash-out")
+	@UseGuards(XUserIdGuard)
 	async cashOut(
 		@Req() req: Record<string, unknown>,
 		@Param("betId") betId: string,

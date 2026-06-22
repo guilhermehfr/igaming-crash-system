@@ -13,31 +13,13 @@ plugins:
     config:
       access:
         - |
-          local auth = kong.request.get_header("authorization")
-          if not auth then
-            return
-          end
-          local m = ngx.re.match(auth, [[\s*[Bb]earer\s+(.+)]], "jo")
-          if not m or not m[1] then
-            return
-          end
-          local token = m[1]
-          local payload = token:match("^[^.]+%.([^.]+)%.")
-          if not payload then
-            return
-          end
-          payload = payload:gsub("-", "+"):gsub("_", "/")
-          local pad = 4 - (#payload % 4)
-          if pad < 4 then
-            payload = payload .. string.rep("=", pad)
-          end
-          local decoded = ngx.decode_base64(payload)
-          if not decoded then
-            return
-          end
-          local sub = decoded:match("\"sub\"%s*:%s*\"([^\"]+)\"")
-          if sub then
-            kong.service.request.set_header("X-User-Id", sub)
+          kong.service.request.clear_header("X-User-Id")
+          kong.service.request.clear_header("X-Gateway-Authenticated")
+
+          local jwt_payload = kong.ctx.shared.authenticated_jwt_payload
+          if jwt_payload and jwt_payload.sub then
+            kong.service.request.set_header("X-User-Id", jwt_payload.sub)
+            kong.service.request.set_header("X-Gateway-Authenticated", "true")
           end
 
 consumers:

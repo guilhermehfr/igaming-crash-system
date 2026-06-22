@@ -1,0 +1,28 @@
+_format_version: "3.0"
+
+plugins:
+  - name: post-function
+    config:
+      access:
+        - |
+          local xUserId = kong.request.get_header("X-User-Id")
+          if xUserId then
+            kong.service.request.set_header("X-User-Id", xUserId)
+          end
+
+services:
+  - name: games-service
+    url: http://games:4001
+    routes:
+      - name: games-routes
+        paths:
+          - /games
+        strip_path: false
+
+  - name: wallets-service
+    url: http://wallets:4002
+    routes:
+      - name: wallets-routes
+        paths:
+          - /wallets
+        strip_path: false

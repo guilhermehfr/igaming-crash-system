@@ -11,25 +11,25 @@ bun run dev
 
 ## Connecting to Backend
 
-During development, Vite proxies API requests to the backend:
+### Development
 
-- `/api/games/*` → `http://localhost:4001`
-- `/api/wallets/*` → `http://localhost:4002`
+REST requests go through Kong (port 8000) via Vite proxy:
 
-Configure proxy in `vite.config.ts`:
+- `/games/*` → `http://localhost:8000` (Kong) → `http://games:4001`
+- `/wallets/*` → `http://localhost:8000` (Kong) → `http://wallets:4002`
+
+Configured in `vite.config.ts`:
 
 ```ts
 server: {
   proxy: {
-    "/api/games": "http://localhost:4001",
-    "/api/wallets": "http://localhost:4002",
+    "/games": "http://localhost:8000",
+    "/wallets": "http://localhost:8000",
   },
 }
 ```
 
-### WebSocket (Socket.io)
-
-Connect directly (not through Vite proxy):
+WebSocket connects directly to the games service (dev only):
 
 ```ts
 import { io } from "socket.io-client";
@@ -38,16 +38,29 @@ const socket = io("http://localhost:4001", {
 });
 ```
 
-## Auth Flow
+### Production
 
-1. Production: JWT from Keycloak → Kong validates → injects `X-User-Id` header
-2. Development: Pass `X-User-Id` header directly (skip Kong)
+All traffic (REST + WebSocket) goes through Kong:
 
 ```ts
-fetch("/api/games/games/current", {
+const socket = io("wss://api.example.com");
+```
+
+Services are not publicly exposed — only accessible via Kong through the Docker network.
+
+## Auth Flow
+
+### Development
+Pass `X-User-Id` header directly. Kong forwards it to the service:
+
+```ts
+fetch("/games/current", {
   headers: { "X-User-Id": "player-1" },
 });
 ```
+
+### Production
+JWT from Keycloak is required. Kong validates the JWT, extracts the `sub` claim, and injects `X-User-Id` + `X-Gateway-Authenticated` headers. Client-provided identity headers are stripped by Kong — spoofing is not possible.
 
 ## WebSocket Events
 
@@ -72,18 +85,18 @@ fetch("/api/games/games/current", {
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/games/games/current` | Current round + bets |
-| GET | `/api/games/games/history?page=1&limit=10` | Past rounds |
-| POST | `/api/games/games/bets` | Place bet `{ amountInMainUnit }` |
-| POST | `/api/games/games/bets/:id/cash-out` | Cash out |
-| GET | `/api/games/games/provably-fair` | Seed status |
-| POST | `/api/games/games/provably-fair/reveal` | Reveal server seed |
-| POST | `/api/games/games/provably-fair/client-seed` | Set client seed |
+| GET | `/games/current` | Current round + bets |
+| GET | `/games/history?page=1&limit=10` | Past rounds |
+| POST | `/games/bets` | Place bet `{ amountInMainUnit }` |
+| POST | `/games/bets/:id/cash-out` | Cash out |
+| GET | `/games/provably-fair` | Seed status |
+| POST | `/games/provably-fair/reveal` | Reveal server seed |
+| POST | `/games/provably-fair/client-seed` | Set client seed |
 
 ### Wallets
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/wallets/wallets/:userId` | Get wallet |
-| POST | `/api/wallets/wallets/:userId/debit` | Debit balance |
-| POST | `/api/wallets/wallets/:userId/credit` | Credit balance |
+| GET | `/wallets/:userId` | Get wallet |
+| POST | `/wallets/:userId/debit` | Debit balance |
+| POST | `/wallets/:userId/credit` | Credit balance |
