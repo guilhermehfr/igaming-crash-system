@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **iGaming Crash System** is a microservices-based betting platform with an explicit state machine for crash game rounds. The codebase uses **Domain-Driven Design (DDD)** and **Hexagonal Architecture** with **Bun** as the runtime and **NestJS** as the application framework.
 
-**Status**: Domain layer ✅ complete (1,247 lines). Application layer ✅ complete (824 lines games + 376 lines wallets). Infrastructure layer ✅ complete (841 lines). Docker environment ✅ operational. Presentation layer: Games ✅ (11 endpoints), Wallets ✅ (5 endpoints). Provably Fair ✅ complete (HMAC seed chain, 4 API endpoints, server seed rotation). Testing ✅ complete (188 tests: 172 unit + 16 E2E).
+**Status**: Domain layer ✅ complete (1,247 lines). Application layer ✅ complete (824 lines games + 376 lines wallets). Infrastructure layer ✅ complete (841 lines). Docker environment ✅ operational. Presentation layer: Games ✅ (11 endpoints), Wallets ✅ (5 endpoints). Provably Fair ✅ complete (HMAC seed chain, 4 API endpoints, server seed rotation). Testing ✅ complete (69 tests: 48 unit + 21 E2E).
 
 ## Core Architecture
 
@@ -28,7 +28,7 @@ Infrastructure Layer (Adapters, DB, Messaging)
 |---------|------|---------|
 | **Games** | 4001 | Crash game rounds with state machine (BETTING→RUNNING→CRASHED) |
 | **Wallets** | 4002 | User account balances with monetary precision (BigInt) |
-| **Kong** | 8000 | API Gateway (routes /games → 4001, /wallets → 4002) |
+| **Kong** | 8000 | API Gateway (routes /games → 4001, /wallets → 4002, /socket.io → 4001 WS) |
 | **Keycloak** | 8080 | Identity Provider (OAuth2/OIDC) |
 | **PostgreSQL** | 5432 | Multi-database (games, wallets, keycloak) |
 | **RabbitMQ** | 5672 | Message broker for async inter-service communication |
@@ -49,6 +49,16 @@ services/
 │       ├── application/      ✅ Complete: 4 use cases, 2 DTOs (376 lines)
 │       ├── infrastructure/   ✅ Complete: TypeORM entities, repositories, migrations
 │       └── presentation/     ✅ Complete: 5 endpoints (health, create, get, debit, credit)
+frontend/
+├── src/
+│   ├── App.tsx               React root component
+│   ├── main.tsx              Entry point
+│   ├── config.ts             Env vars config
+│   └── index.css             Tailwind import
+├── .env                      Local env overrides (gitignored)
+├── .env.example              Committed env template
+├── vite.config.ts            Vite + proxy to Kong
+└── package.json              React 19, Vite 8, socket.io-client
 ```
 
 ## Domain Layer (The Heart of the System)
@@ -287,6 +297,24 @@ interface IWalletRepository {
   bun docker:up
   ```
 
+### Kong CORS Env Var Fix
+
+- **Problem**: `$FRONTEND_URL` in `kong.prod.yml` was a literal string — Kong declarative config doesn't resolve shell `$VAR` syntax.
+- **Fix**: Changed to `${{FRONTEND_URL}}` (Kong's built-in template syntax) and added `FRONTEND_URL` env to kong service in `docker-compose.yml`.
+- **Files**: `docker/kong/kong.prod.yml`, `docker-compose.yml`
+
+### PostgreSQL Init Script Env Var
+
+- **Problem**: `init-databases.sh` hardcoded database list (`games wallets keycloak`), ignoring `$POSTGRES_EXTRA_DATABASES` env var set in compose.
+- **Fix**: Script now reads `$POSTGRES_EXTRA_DATABASES` env var with fallback to the same defaults.
+- **File**: `docker/postgres/init-databases.sh`
+
+### WebSocket Routing Through Kong
+
+- **Problem**: Frontend connected WS directly to `localhost:4001` (bypassing Kong). Kong had no `/socket.io` route.
+- **Fix**: Added `/socket.io` routes to both `kong.dev.yml` and `kong.prod.yml`. Updated Vite proxy with `ws: true` for `/socket.io`. Changed frontend WS connection to same-origin (through Vite proxy → Kong).
+- **Files**: `docker/kong/kong.*.yml`, `frontend/vite.config.ts`, `frontend/README.md`
+
 ## Technology Stack
 
 - **Runtime**: Bun 1.x (Alpine Docker image)
@@ -297,8 +325,28 @@ interface IWalletRepository {
 - **Message Queue**: RabbitMQ 4.2.4
 - **API Gateway**: Kong 3.9.1 (DB-less, declarative config)
 - **Auth**: Keycloak 26.5.5 (OIDC/OAuth2)
-- **Real-Time**: Socket.io 4.8.3 (games service - ✅ implemented)
+- **Real-Time**: Socket.io 4.8.3 (games service) / socket.io-client 4.8.3 (frontend) - ✅ implemented
 - **Testing**: Bun native test framework
+
+## Environment Variables
+
+Both services have a `src/config/configuration.ts` that reads all `process.env.*` vars with defaults. These can be overridden via `.env` file or Docker environment.
+
+| Variable | Services | Default | Purpose |
+|----------|----------|---------|---------|
+| `PORT` | games, wallets | `4001` / `4002` | HTTP listen port |
+| `NODE_ENV` | games, wallets | `development` | `"production"` enables gateway auth check in `XUserIdGuard` |
+| `DB_HOST` | games, wallets | `localhost` | PostgreSQL host (Docker Compose: `postgres`) |
+| `DB_PORT` | games, wallets | `5432` | PostgreSQL port |
+| `DB_USER` | games, wallets | `admin` | PostgreSQL user |
+| `DB_PASS` | games, wallets | `admin` | PostgreSQL password |
+| `DB_NAME` | games, wallets | `games` / `wallets` | PostgreSQL database name |
+| `RABBITMQ_URL` | games, wallets | `amqp://admin:admin@localhost:5672` | RabbitMQ connection string |
+| `CRASH_POINT_OVERRIDE` | games | (unset) | Forces crash point to this value (testing only) |
+| `VITE_API_URL` | frontend | `""` | API base URL (empty = same-origin via Vite proxy) |
+| `VITE_WS_URL` | frontend | `""` | WebSocket server URL (empty = same-origin via proxy → Kong) |
+| `FRONTEND_URL` | kong (Docker) | `"http://localhost:5173"` | CORS origin for Kong production config |
+| `DATABASE_URL` | — | — | **Dead var** — documented but never consumed by code |
 
 ## Reliability
 
@@ -396,8 +444,8 @@ psql -h localhost -U admin -d wallets -W
 
 ```bash
 # Health check endpoints
-curl http://localhost:4001/games/health   # Games service
-curl http://localhost:4002/wallets/health   # Wallets service
+curl http://localhost:8000/games/health   # Games service
+curl http://localhost:8000/wallets/health   # Wallets service
 
 # Gateway auth check (401 without token)
 curl -i http://localhost:8000/games/current
@@ -529,7 +577,7 @@ Infrastructure layer:
   - Multiplier increments by 0.001 per interval
   - Players can cash out via `cashOutBet(betId, multiplier)`
   - Auto-crash triggered when multiplier ≥ crashPoint
-  - Emit WebSocket event `round:multiplier-updated` (TODO: integrate emitter)
+  - Emit WebSocket event `round:multiplier-updated`
   
 - **CRASHED Phase** (auto-liquidation):
   - All PENDING bets marked LOST
@@ -801,7 +849,7 @@ If a Round is stuck or has unexpected behavior:
 
 1. **Connect frontend to backend APIs**
    - Use Kong gateway at `http://localhost:8000` (routes `/games/*` → 4001, `/wallets/*` → 4002)
-   - WebSocket direct to `ws://localhost:4001` (Socket.io)
+   - WebSocket connects through Kong via Vite proxy (`/socket.io` → `localhost:8000` → games:4001)
    - Auth: JWT from Keycloak → Kong validates + injects `X-User-Id`
    - For dev without Keycloak: pass `X-User-Id` header directly
 
@@ -821,12 +869,12 @@ If a Round is stuck or has unexpected behavior:
 
 ---
 
-**Last Updated**: 2026-06-21  
+**Last Updated**: 2026-06-22  
 **Domain Layer Status**: ✅ Complete (1,247 lines, 7 files)  
 **Application Layer Status**: ✅ Wallets Complete (376 lines, 9 files) | ✅ Games Complete (824 lines, 13 files)  
 **Infrastructure Layer Status**: ✅ Complete (841 lines, 9 files)  
 **Presentation Layer Status**: ✅ Complete (Games: 11 endpoints, Wallets: 5 endpoints)  
 **RabbitMQ Integration**: ✅ Complete (Games → Wallets async communication)  
 **Docker Environment**: ✅ Operational (PostgreSQL, RabbitMQ, Keycloak, Kong)  
-**Testing Status**: ✅ Complete (188 tests: 172 unit + 16 E2E)  
+**Testing Status**: ✅ Complete (69 tests: 48 unit + 21 E2E)  
 **Repository**: https://github.com/guilhermehfr/igaming-crash-system

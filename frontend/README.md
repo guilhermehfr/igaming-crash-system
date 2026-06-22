@@ -13,10 +13,11 @@ bun run dev
 
 ### Development
 
-REST requests go through Kong (port 8000) via Vite proxy:
+All traffic (REST + WebSocket) goes through Kong via Vite proxy:
 
 - `/games/*` → `http://localhost:8000` (Kong) → `http://games:4001`
 - `/wallets/*` → `http://localhost:8000` (Kong) → `http://wallets:4002`
+- `/socket.io/*` → `http://localhost:8000` (Kong, WebSocket) → `http://games:4001`
 
 Configured in `vite.config.ts`:
 
@@ -25,22 +26,26 @@ server: {
   proxy: {
     "/games": "http://localhost:8000",
     "/wallets": "http://localhost:8000",
+    "/socket.io": {
+      target: "http://localhost:8000",
+      ws: true,
+    },
   },
 }
 ```
 
-WebSocket connects directly to the games service (dev only):
+WebSocket connects through the same proxy (same-origin):
 
 ```ts
 import { io } from "socket.io-client";
-const socket = io("http://localhost:4001", {
+const socket = io({
   transports: ["websocket"],
 });
 ```
 
 ### Production
 
-All traffic (REST + WebSocket) goes through Kong:
+All traffic goes through Kong. Point the frontend to your gateway domain:
 
 ```ts
 const socket = io("wss://api.example.com");
@@ -77,7 +82,7 @@ JWT from Keycloak is required. Kong validates the JWT, extracts the `sub` claim,
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VITE_API_URL` | `""` | API base URL (empty = same origin via proxy) |
-| `VITE_WS_URL` | `"http://localhost:4001"` | WebSocket server URL |
+| `VITE_WS_URL` | `""` | WebSocket server URL (empty = same origin via proxy → Kong) |
 
 ## API Endpoints (via proxy)
 

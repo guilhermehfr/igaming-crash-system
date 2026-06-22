@@ -25,7 +25,7 @@ The system follows **Domain-Driven Design (DDD)** and **Hexagonal Architecture**
 |---------|------|---------|
 | **Games** | 4001 | Crash game rounds with state machine (BETTING → RUNNING → CRASHED) |
 | **Wallets** | 4002 | User account balances with monetary precision (BigInt) |
-| **Kong** | 8000 | API Gateway (routes /games → 4001, /wallets → 4002) |
+| **Kong** | 8000 | API Gateway (routes /games → 4001, /wallets → 4002, /socket.io → 4001 WS) |
 | **Keycloak** | 8080 | Identity Provider (OAuth2/OIDC) |
 | **RabbitMQ** | 5672 | Message broker for async inter-service communication |
 
@@ -100,7 +100,7 @@ Precision via BigInt (centavos = 1/100 of main unit, no floating-point errors).
 
 ## Real-time
 
-WebSockets for round synchronization (Games service on port 4001).
+WebSockets for round synchronization. Traffic routes through Kong (`/socket.io` → `:8000` → Games `:4001`). In development, Vite proxy handles same-origin WS forwarding to Kong.
 
 ### Events
 
@@ -160,7 +160,7 @@ Health endpoints are accessed directly from service ports.
 
 ## Testing
 
-- **188 tests total**: 172 unit + 16 E2E
+- **69 tests total**: 48 unit + 21 E2E
 - Bun native test framework
 - Domain layer thoroughly tested
 - Application layer use cases tested
@@ -189,6 +189,12 @@ Swagger UI available at:
 │           ├── application/      # Use cases, DTOs
 │           ├── infrastructure/  # TypeORM entities, repositories
 │           └── presentation/    # REST controllers
+├── frontend/
+│   └── src/
+│       ├── App.tsx              # React root component
+│       ├── main.tsx             # Entry point
+│       ├── config.ts            # Env vars config
+│       └── index.css            # Tailwind import
 ├── docker/
 └── docker-compose.yml
 ```

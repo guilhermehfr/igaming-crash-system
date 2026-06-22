@@ -1,6 +1,18 @@
 _format_version: "3.0"
 
 plugins:
+  - name: cors
+    config:
+      origins:
+        - "${{FRONTEND_URL}}"
+      headers:
+        - "Authorization"
+        - "Content-Type"
+      methods:
+        - GET
+        - POST
+        - OPTIONS
+
   - name: jwt
     config:
       claims_to_verify:
@@ -45,6 +57,10 @@ services:
       - name: games-routes
         paths:
           - /games
+        strip_path: false
+      - name: games-ws-routes
+        paths:
+          - /socket.io
         strip_path: false
 
   - name: wallets-service
