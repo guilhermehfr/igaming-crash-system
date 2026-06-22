@@ -38,81 +38,29 @@ class MockRoundRepository implements IRoundRepository {
 }
 
 class MockGamesGateway {
-	events: Array<{ event: string; data: Record<string, unknown> }> = [];
-
 	emitRoundStateChange(
-		roundId: string,
-		state: RoundState,
-		crashPoint: number | null,
-	) {
-		this.events.push({
-			event: "round:state-changed",
-			data: { roundId, state, crashPoint },
-		});
-	}
-
-	emitMultiplierUpdate(roundId: string, multiplier: number, state: RoundState) {
-		this.events.push({
-			event: "round:multiplier-updated",
-			data: { roundId, multiplier, state },
-		});
-	}
-
+		_roundId: string,
+		_state: RoundState,
+		_crashPoint: number | null,
+	) {}
+	emitMultiplierUpdate(
+		_roundId: string,
+		_multiplier: number,
+		_state: RoundState,
+	) {}
 	emitRoundCrashed(
-		roundId: string,
-		multiplier: number,
-		stats: {
-			totalBets: number;
-			pendingBets: number;
-			cashedOutBets: number;
-			lostBets: number;
-		},
-	) {
-		this.events.push({
-			event: "round:crashed",
-			data: { roundId, multiplier, stats },
-		});
-	}
-
-	emitBetPlaced(
-		roundId: string,
-		bet: {
-			id: string;
-			userId: string;
-			amountInMainUnit: number;
-			state: string;
-		},
-	) {
-		this.events.push({ event: "round:bet-placed", data: { roundId, bet } });
-	}
-
-	emitBetCashedOut(
-		roundId: string,
-		bet: {
-			id: string;
-			userId: string;
-			multiplier: number | null;
-			winningsInMainUnit: number;
-		},
-	) {
-		this.events.push({ event: "round:bet-cashed-out", data: { roundId, bet } });
-	}
+		_roundId: string,
+		_multiplier: number,
+		_stats: Record<string, unknown>,
+	) {}
+	emitBetPlaced(_roundId: string, _bet: Record<string, unknown>) {}
+	emitBetCashedOut(_roundId: string, _bet: Record<string, unknown>) {}
 }
 
 class MockRabbitMQPublisher {
-	events: Array<{ type: string; data: Record<string, unknown> }> = [];
-
-	async publishBetPlaced(data: Record<string, unknown>) {
-		this.events.push({ type: "BetPlaced", data });
-	}
-
-	async publishBetCashedOut(data: Record<string, unknown>) {
-		this.events.push({ type: "BetCashedOut", data });
-	}
-
-	async publishBetLost(data: Record<string, unknown>) {
-		this.events.push({ type: "BetLost", data });
-	}
+	async publishBetPlaced(_data: Record<string, unknown>) {}
+	async publishBetCashedOut(_data: Record<string, unknown>) {}
+	async publishBetLost(_data: Record<string, unknown>) {}
 }
 
 class MockCrashPointGenerator implements CrashPointGenerator {
@@ -126,11 +74,8 @@ describe("RoundLifecycleService - Provably Fair", () => {
 
 	beforeEach(() => {
 		service = new RoundLifecycleService(
-			// biome-ignore lint/suspicious/noExplicitAny: mock casts in tests
 			new MockRoundRepository() as any,
-			// biome-ignore lint/suspicious/noExplicitAny: mock casts in tests
 			new MockGamesGateway() as any,
-			// biome-ignore lint/suspicious/noExplicitAny: mock casts in tests
 			new MockRabbitMQPublisher() as any,
 			new MockCrashPointGenerator(),
 		);
@@ -140,106 +85,48 @@ describe("RoundLifecycleService - Provably Fair", () => {
 		service.onModuleDestroy();
 	});
 
-	describe("getServerSeedHash", () => {
-		it("should return a 64-char hex string", () => {
-			const hash = service.getServerSeedHash();
-			expect(hash).toMatch(/^[0-9a-f]{64}$/);
-		});
+	it("should generate valid server seed with matching SHA256 hash", () => {
+		const seed = service.getServerSeed();
+		const hash = service.getServerSeedHash();
 
-		it("should return the SHA256 of the server seed", () => {
-			const serverSeed = service.getServerSeed();
-			const expectedHash = createHash("sha256")
-				.update(serverSeed)
-				.digest("hex");
-			expect(service.getServerSeedHash()).toBe(expectedHash);
-		});
-
-		it("should not equal the server seed itself", () => {
-			expect(service.getServerSeedHash()).not.toBe(service.getServerSeed());
-		});
+		expect(seed).toMatch(/^[0-9a-f]{64}$/);
+		expect(hash).toMatch(/^[0-9a-f]{64}$/);
+		expect(hash).not.toBe(seed);
+		expect(hash).toBe(
+			createHash("sha256").update(seed).digest("hex"),
+		);
 	});
 
-	describe("getServerSeed", () => {
-		it("should return a non-empty string", () => {
-			expect(service.getServerSeed()).toBeTruthy();
-		});
+	it("should manage client seed: get, set, reject empty", () => {
+		expect(service.getClientSeed()).toMatch(/^[0-9a-f]{64}$/);
 
-		it("should return a 64-char hex string", () => {
-			expect(service.getServerSeed()).toMatch(/^[0-9a-f]{64}$/);
-		});
+		service.setClientSeed("my-custom-seed");
+		expect(service.getClientSeed()).toBe("my-custom-seed");
+
+		expect(() => service.setClientSeed("")).toThrow("non-empty");
+		expect(() => service.setClientSeed("   ")).toThrow("non-empty");
 	});
 
-	describe("getClientSeed", () => {
-		it("should return a non-empty string", () => {
-			expect(service.getClientSeed()).toBeTruthy();
-		});
-
-		it("should return a 64-char hex string", () => {
-			expect(service.getClientSeed()).toMatch(/^[0-9a-f]{64}$/);
-		});
+	it("should start nonce at 1", () => {
+		expect(service.getNonce()).toBe(1);
 	});
 
-	describe("setClientSeed", () => {
-		it("should update the client seed", () => {
-			service.setClientSeed("my-custom-seed");
-			expect(service.getClientSeed()).toBe("my-custom-seed");
-		});
+	it("should reveal server seed, generate new one, and update hash", () => {
+		const currentSeed = service.getServerSeed();
+		const oldHash = service.getServerSeedHash();
+		const clientSeed = service.getClientSeed();
+		const nonce = service.getNonce();
 
-		it("should reject empty seed", () => {
-			expect(() => service.setClientSeed("")).toThrow("non-empty");
-		});
+		const result = service.revealServerSeed();
 
-		it("should reject whitespace-only seed", () => {
-			expect(() => service.setClientSeed("   ")).toThrow("non-empty");
-		});
-	});
-
-	describe("getNonce", () => {
-		it("should start at 1", () => {
-			expect(service.getNonce()).toBe(1);
-		});
-	});
-
-	describe("revealServerSeed", () => {
-		it("should return the current server seed", () => {
-			const currentSeed = service.getServerSeed();
-			const result = service.revealServerSeed();
-			expect(result.serverSeed).toBe(currentSeed);
-		});
-
-		it("should generate a new server seed after reveal", () => {
-			const currentSeed = service.getServerSeed();
-			service.revealServerSeed();
-			expect(service.getServerSeed()).not.toBe(currentSeed);
-		});
-
-		it("should update the server seed hash after reveal", () => {
-			const oldHash = service.getServerSeedHash();
-			service.revealServerSeed();
-			expect(service.getServerSeedHash()).not.toBe(oldHash);
-		});
-
-		it("should return the new server seed hash", () => {
-			const result = service.revealServerSeed();
-			expect(result.serverSeedHash).toBe(service.getServerSeedHash());
-		});
-
-		it("should return the current client seed", () => {
-			const result = service.revealServerSeed();
-			expect(result.clientSeed).toBe(service.getClientSeed());
-		});
-
-		it("should return the current nonce", () => {
-			const result = service.revealServerSeed();
-			expect(result.nonce).toBe(service.getNonce());
-		});
-
-		it("should return the new hash matching SHA256 of new seed", () => {
-			const result = service.revealServerSeed();
-			const expectedHash = createHash("sha256")
-				.update(service.getServerSeed())
-				.digest("hex");
-			expect(result.serverSeedHash).toBe(expectedHash);
-		});
+		expect(result.serverSeed).toBe(currentSeed);
+		expect(result.clientSeed).toBe(clientSeed);
+		expect(result.nonce).toBe(nonce);
+		expect(result.serverSeedHash).toBe(service.getServerSeedHash());
+		expect(service.getServerSeed()).not.toBe(currentSeed);
+		expect(service.getServerSeedHash()).not.toBe(oldHash);
+		expect(result.serverSeedHash).toBe(
+			createHash("sha256").update(service.getServerSeed()).digest("hex"),
+		);
 	});
 });
