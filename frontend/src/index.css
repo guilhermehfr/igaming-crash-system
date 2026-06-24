@@ -1,10 +1,23 @@
 @import "tailwindcss";
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/inter";
 
 @theme {
+  --color-cyber-green: #00ff7f;
+  --color-neon-green: #22ff7a;
+  --color-loss-red: #ff4444;
+  --color-deep-slate: #0b0e11;
+  --color-navy-blue: #0a0e17;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
+  html,
   body {
-    @apply bg-gray-100;
+    block-size: 100%;
+  }
+  body {
+    @apply bg-deep-slate text-slate-200 antialiased font-sans;
   }
 }
