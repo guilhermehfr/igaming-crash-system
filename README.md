@@ -114,6 +114,24 @@ WebSockets for round synchronization. Traffic routes through Kong (`/socket.io` 
 
 ---
 
+## Frontend
+
+React 19 application built with Vite 8 and Tailwind 4. All API traffic routes through Kong on port 8000. In development, Vite proxy handles same-origin forwarding (`/games/*`, `/wallets/*`, `/socket.io`) to Kong.
+
+### Crash Graph
+
+HTML5 Canvas renders the exponential multiplier curve with `requestAnimationFrame`. The 150-point path uses log-scale for natural curve shape, biased toward early growth (`t ** 2.2`). A 12-vertex rocket vector follows the curve tip via tangent rotation. On crash, the line transitions from green to red over 600ms with an expanding white circle explosion and 8 smoke particles.
+
+### Auth
+
+Keycloak OIDC password grant (`grant_type=password`, realm `crash-game`, client `crash-game-client`). On successful login, the JWT is stored in localStorage and sent as `Authorization: Bearer <token>` (production) or `X-User-Id` (development). If Keycloak is unreachable in development, a static UUID fallback is used. Wallets and bets use the `sub` UUID from the JWT as the system identity; email/username is display-only.
+
+### Real-time
+
+Socket.io connects through Kong. The frontend subscribes to `round:state-changed`, `round:multiplier-updated`, `round:bet-placed`, `round:bet-cashed-out`, and `round:crashed` events. When connected, the canvas multiplier comes from the server; when disconnected, a local `setInterval` fallback at 100ms allows dev without backend.
+
+---
+
 ## Reliability
 
 - **Idempotent Consumers**: Duplicate events detected via eventId (stored in consumed_events table with unique constraint) → skipped safely
@@ -162,7 +180,7 @@ Health endpoints are accessed directly from service ports.
 
 ## Testing
 
-- **69 tests total**: 48 unit + 21 E2E
+- **140 tests total**: 106 unit + 34 E2E
 - Bun native test framework
 - Domain layer thoroughly tested
 - Application layer use cases tested
@@ -193,10 +211,22 @@ Swagger UI available at:
 │           └── presentation/    # REST controllers
 ├── frontend/
 │   └── src/
-│       ├── App.tsx              # React root component
+│       ├── App.tsx              # Root with AuthProvider → LoginPage | GamePage
 │       ├── main.tsx             # Entry point
-│       ├── config.ts            # Env vars config
-│       └── index.css            # Tailwind import
+│       ├── config.ts            # Env vars config (apiUrl, wsUrl, keycloakUrl)
+│       ├── index.css            # Tailwind 4 + custom theme (colors, fonts)
+│       ├── lib/
+│       │   ├── auth.ts          # keycloakLogin() — OIDC password grant
+│       │   └── api.ts           # apiFetch() — env-aware header injection
+│       ├── contexts/
+│       │   ├── AuthContext.tsx   # Keycloak login, dev fallback, localStorage
+│       │   └── SocketContext.tsx # Socket.io connection, round state, bets
+│       └── components/
+│           ├── auth/            # LoginForm, LoginPage
+│           ├── brand/           # BrandPanel (rocket logo)
+│           ├── game/            # GameCanvas, GamePage, RightPanel, TopBar,
+│           │                    # CrashHistoryPills, LiveBets
+│           └── primitives/      # Button, Input (tailwind-variants)
 ├── docker/
 └── docker-compose.yml
 ```
@@ -212,6 +242,11 @@ bun run docker:up
 
 This command boots up the entire stack automatically (databases, services, gateway, auth, and messaging).
 
+For development of the frontend separately:
+```bash
+cd frontend && bun dev
+```
+
 For production (no direct service ports — traffic only through Kong):
 ```bash
 bun docker:up:prod
@@ -226,3 +261,5 @@ bun docker:up:prod
 - Eventual consistency strictly applied to the financial workflow
 - Explicit state machine in Round aggregate for game logic
 - Frontend consumes the unified API through the gateway + stable WebSocket connection
+- Canvas-based crash graph renderer with requestAnimationFrame loop
+- Env-aware auth headers: dev uses X-User-Id, prod uses JWT Authorization

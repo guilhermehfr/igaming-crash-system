@@ -111,6 +111,24 @@ WebSockets para sincronização de rodadas. O tráfego passa pelo Kong (`/socket
 
 ---
 
+## Frontend
+
+Aplicação React 19 construída com Vite 8 e Tailwind 4. Todo tráfego de API rota via Kong na porta 8000. Em desenvolvimento, o proxy do Vite faz o encaminhamento de mesma origem (`/games/*`, `/wallets/*`, `/socket.io`) para o Kong.
+
+### Gráfico do Crash
+
+Canvas HTML5 renderiza a curva exponencial do multiplicador com `requestAnimationFrame`. O caminho de 150 pontos usa escala logarítmica para formato natural da curva, enviesada para crescimento inicial (`t ** 2.2`). Um foguete vetorial de 12 vértices segue a ponta da curva via rotação tangente. No crash, a linha transita de verde para vermelho em 600ms com explosão de círculo branco expansivo e 8 partículas de fumaça.
+
+### Autenticação
+
+Keycloak OIDC password grant (`grant_type=password`, realm `crash-game`, client `crash-game-client`). No login bem-sucedido, o JWT é armazenado no localStorage e enviado como `Authorization: Bearer <token>` (produção) ou `X-User-Id` (desenvolvimento). Se o Keycloak estiver inacessível em desenvolvimento, um fallback de UUID estático é usado. Carteiras e apostas usam o UUID `sub` do JWT como identidade do sistema; email/username é apenas exibição.
+
+### Tempo Real
+
+Socket.io conecta via Kong. O frontend assina os eventos `round:state-changed`, `round:multiplier-updated`, `round:bet-placed`, `round:bet-cashed-out` e `round:crashed`. Quando conectado, o multiplicador do canvas vem do servidor; quando desconectado, um fallback local com `setInterval` a 100ms permite desenvolvimento sem backend.
+
+---
+
 ## Confiabilidade
 
 - **Consumidores Idempotentes**: Eventos duplicados detectados via eventId (armazenado na tabela consumed_events com constraint única) → ignorados com segurança
@@ -158,7 +176,7 @@ Todas as rotas expostas via Kong (porta 8000).
 
 ## Testes
 
-- **69 testes no total**: 48 unitários + 21 E2E
+- **140 testes no total**: 106 unitários + 34 E2E
 - Framework de testes nativo do Bun
 - Camada de domínio extensivamente testada
 - Use cases da camada de aplicação testados
@@ -183,10 +201,22 @@ Todas as rotas expostas via Kong (porta 8000).
 │           └── presentation/    # Controllers REST
 ├── frontend/
 │   └── src/
-│       ├── App.tsx              # Componente raiz React
+│       ├── App.tsx              # Raiz com AuthProvider → LoginPage | GamePage
 │       ├── main.tsx             # Ponto de entrada
-│       ├── config.ts            # Config de variáveis de ambiente
-│       └── index.css            # Import do Tailwind
+│       ├── config.ts            # Config de env vars (apiUrl, wsUrl, keycloakUrl)
+│       ├── index.css            # Tailwind 4 + tema customizado (cores, fontes)
+│       ├── lib/
+│       │   ├── auth.ts          # keycloakLogin() — OIDC password grant
+│       │   └── api.ts           # apiFetch() — headers com consciência de ambiente
+│       ├── contexts/
+│       │   ├── AuthContext.tsx   # Login Keycloak, fallback dev, localStorage
+│       │   └── SocketContext.tsx # Conexão Socket.io, estado da rodada, apostas
+│       └── components/
+│           ├── auth/            # LoginForm, LoginPage
+│           ├── brand/           # BrandPanel (logo foguete)
+│           ├── game/            # GameCanvas, GamePage, RightPanel, TopBar,
+│           │                    # CrashHistoryPills, LiveBets
+│           └── primitives/      # Button, Input (tailwind-variants)
 ├── docker/
 └── docker-compose.yml
 ```
@@ -201,6 +231,11 @@ bun run docker:up
 ```
 
 Este comando inicializa toda a stack automaticamente (bancos, serviços, gateway, auth e mensageria).
+
+Para desenvolvimento do frontend separadamente:
+```bash
+cd frontend && bun dev
+```
 
 Para produção (sem portas diretas — tráfego apenas via Kong):
 ```bash
@@ -217,6 +252,8 @@ bun docker:up:prod
 - Máquina de estados explícita no aggregate Round para lógica do jogo
 - Kong injeta o header `X-User-Id` a partir da claim `sub` do JWT; serviços confiam neste header
 - Guard `XUserIdGuard` garante presença do header em endpoints protegidos (apostas, cash-out, wallets); health e endpoints somente leitura são públicos
+- Renderizador de gráfico crash baseado em Canvas com loop requestAnimationFrame
+- Headers de autenticação com consciência de ambiente: dev usa X-User-Id, prod usa JWT Authorization
 
 ## Documentação da API
 
