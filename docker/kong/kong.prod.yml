@@ -8,12 +8,25 @@ plugins:
       headers:
         - "Authorization"
         - "Content-Type"
+        - "X-Demo-Session"
       methods:
         - GET
         - POST
         - OPTIONS
 
   - name: jwt
+    routes:
+      - games-routes
+      - games-ws-routes
+    config:
+      claims_to_verify:
+        - exp
+      key_claim_name: kid
+      header_names:
+        - authorization
+
+  - name: jwt
+    route: wallets-routes
     config:
       claims_to_verify:
         - exp
@@ -22,6 +35,9 @@ plugins:
         - authorization
 
   - name: post-function
+    routes:
+      - games-routes
+      - games-ws-routes
     config:
       access:
         - |
@@ -32,6 +48,30 @@ plugins:
           if jwt_payload and jwt_payload.sub then
             kong.service.request.set_header("X-User-Id", jwt_payload.sub)
             kong.service.request.set_header("X-Gateway-Authenticated", "true")
+          end
+
+          local demo_session = kong.request.get_header("X-Demo-Session")
+          if demo_session then
+            kong.service.request.set_header("X-Demo-Session", demo_session)
+          end
+
+  - name: post-function
+    route: wallets-routes
+    config:
+      access:
+        - |
+          kong.service.request.clear_header("X-User-Id")
+          kong.service.request.clear_header("X-Gateway-Authenticated")
+
+          local jwt_payload = kong.ctx.shared.authenticated_jwt_payload
+          if jwt_payload and jwt_payload.sub then
+            kong.service.request.set_header("X-User-Id", jwt_payload.sub)
+            kong.service.request.set_header("X-Gateway-Authenticated", "true")
+          end
+
+          local demo_session = kong.request.get_header("X-Demo-Session")
+          if demo_session then
+            kong.service.request.set_header("X-Demo-Session", demo_session)
           end
 
 consumers:
@@ -51,6 +91,14 @@ consumers:
           -----END PUBLIC KEY-----
 
 services:
+  - name: keycloak-service
+    url: http://keycloak:8080
+    routes:
+      - name: keycloak-routes
+        paths:
+          - /auth
+        strip_path: true
+
   - name: games-service
     url: http://games:4001
     routes:

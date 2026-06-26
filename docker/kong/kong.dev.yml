@@ -1,6 +1,22 @@
 _format_version: "3.0"
 
 plugins:
+  - name: cors
+    config:
+      origins:
+        - "http://localhost:4173"
+        - "http://localhost:5173"
+        - "http://localhost:8000"
+      headers:
+        - "Authorization"
+        - "Content-Type"
+        - "X-User-Id"
+        - "X-Demo-Session"
+      methods:
+        - GET
+        - POST
+        - OPTIONS
+
   - name: post-function
     config:
       access:
@@ -10,7 +26,20 @@ plugins:
             kong.service.request.set_header("X-User-Id", xUserId)
           end
 
+          local demoSession = kong.request.get_header("X-Demo-Session")
+          if demoSession then
+            kong.service.request.set_header("X-Demo-Session", demoSession)
+          end
+
 services:
+  - name: keycloak-service
+    url: http://keycloak:8080
+    routes:
+      - name: keycloak-routes
+        paths:
+          - /auth
+        strip_path: true
+
   - name: games-service
     url: http://games:4001
     routes:
