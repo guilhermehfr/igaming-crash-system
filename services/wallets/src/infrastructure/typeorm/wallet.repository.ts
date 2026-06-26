@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Wallet } from '@domain/wallet.entity';
 import { Money } from '@domain/money.vo';
-import { IWalletRepository } from '@domain/wallet.repository';
+import type { IWalletRepository } from '@domain/wallet.repository';
 import { WalletTypeormEntity } from './wallet.typeorm-entity';
 
 @Injectable()
@@ -37,6 +37,18 @@ export class WalletRepository implements IWalletRepository {
     return this.mapTypeormToDomain(walletEntity);
   }
 
+  async findByUserIdAndDemoSessionId(userId: string, demoSessionId: string): Promise<Wallet | null> {
+    const walletEntity = await this.walletRepository.findOne({
+      where: { userId, demoSessionId },
+    });
+
+    if (!walletEntity) {
+      return null;
+    }
+
+    return this.mapTypeormToDomain(walletEntity);
+  }
+
   async save(wallet: Wallet): Promise<Wallet> {
     const walletEntity = this.mapDomainToTypeorm(wallet);
     await this.walletRepository.save(walletEntity);
@@ -57,6 +69,7 @@ export class WalletRepository implements IWalletRepository {
     const entity = new WalletTypeormEntity();
     entity.id = wallet.id;
     entity.userId = wallet.userId;
+    entity.demoSessionId = wallet.demoSessionId;
     entity.balanceInCentavos = wallet.balance.amountInCentavos;
     return entity;
   }
@@ -67,6 +80,7 @@ export class WalletRepository implements IWalletRepository {
       entity.id,
       entity.userId,
       balance,
+      entity.demoSessionId,
       entity.createdAt,
       entity.updatedAt,
     );

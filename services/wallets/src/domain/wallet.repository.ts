@@ -5,6 +5,8 @@ export interface IWalletRepository {
 
   findByUserId(userId: string): Promise<Wallet | null>;
 
+  findByUserIdAndDemoSessionId(userId: string, demoSessionId: string): Promise<Wallet | null>;
+
   save(wallet: Wallet): Promise<Wallet>;
 
   delete(id: string): Promise<boolean>;

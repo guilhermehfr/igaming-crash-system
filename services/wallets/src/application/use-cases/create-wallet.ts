@@ -21,7 +21,10 @@ export class CreateWalletUseCase {
       throw new Error('Initial balance cannot be negative');
     }
 
-    const existingWallet = await this.walletRepository.findByUserId(input.userId);
+    const existingWallet = input.demoSessionId
+      ? await this.walletRepository.findByUserIdAndDemoSessionId(input.userId, input.demoSessionId)
+      : await this.walletRepository.findByUserId(input.userId);
+
     if (existingWallet) {
       throw new Error(`Wallet already exists for user ${input.userId}`);
     }
@@ -31,7 +34,7 @@ export class CreateWalletUseCase {
 
     const walletId = `wallet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    const wallet = Wallet.create(walletId, input.userId, initialMoney);
+    const wallet = Wallet.create(walletId, input.userId, initialMoney, input.demoSessionId ?? null);
 
     await this.walletRepository.save(wallet);
 

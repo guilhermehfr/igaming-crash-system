@@ -9,12 +9,14 @@ export class GetWalletUseCase {
     private readonly walletRepository: IWalletRepository,
   ) {}
 
-  async execute(userId: string): Promise<WalletResponseDto> {
+  async execute(userId: string, demoSessionId?: string): Promise<WalletResponseDto> {
     if (!userId || userId.trim() === '') {
       throw new Error('User ID must be non-empty');
     }
 
-    const wallet = await this.walletRepository.findByUserId(userId);
+    const wallet = demoSessionId
+      ? await this.walletRepository.findByUserIdAndDemoSessionId(userId, demoSessionId)
+      : await this.walletRepository.findByUserId(userId);
 
     if (!wallet) {
       throw new Error(`Wallet not found for user ${userId}`);

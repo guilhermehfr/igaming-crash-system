@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Req, UseGuards, Headers } from '@nestjs/common';
 
 import { XUserIdGuard } from '@presentation/guards/x-user-id.guard';
 import { CreateWalletUseCase } from '@application/use-cases/create-wallet';
@@ -28,19 +28,24 @@ export class WalletsController {
   async createWallet(
     @Req() req: Record<string, unknown>,
     @Body() body: { initialBalanceInMainUnit?: number; userId?: string },
+    @Headers('x-demo-session') demoSessionId?: string,
   ): Promise<WalletResponseDto> {
     const dto = new CreateWalletDto(
       req.userId as string,
       body.initialBalanceInMainUnit,
       body.userId,
     );
+    dto.demoSessionId = demoSessionId;
     return await this.createWalletUseCase.execute(dto);
   }
 
   @Get(':userId')
   @UseGuards(XUserIdGuard)
-  async getWallet(@Req() req: Record<string, unknown>): Promise<WalletResponseDto> {
-    return await this.getWalletUseCase.execute(req.userId as string);
+  async getWallet(
+    @Req() req: Record<string, unknown>,
+    @Headers('x-demo-session') demoSessionId?: string,
+  ): Promise<WalletResponseDto> {
+    return await this.getWalletUseCase.execute(req.userId as string, demoSessionId);
   }
 
   @Post(':userId/debit')
@@ -48,8 +53,9 @@ export class WalletsController {
   async debitWallet(
     @Req() req: Record<string, unknown>,
     @Body() body: { amountInMainUnit: number },
+    @Headers('x-demo-session') demoSessionId?: string,
   ): Promise<WalletResponseDto> {
-    return await this.debitWalletUseCase.execute(req.userId as string, body.amountInMainUnit);
+    return await this.debitWalletUseCase.execute(req.userId as string, body.amountInMainUnit, demoSessionId);
   }
 
   @Post(':userId/credit')
@@ -57,7 +63,8 @@ export class WalletsController {
   async creditWallet(
     @Req() req: Record<string, unknown>,
     @Body() body: { amountInMainUnit: number },
+    @Headers('x-demo-session') demoSessionId?: string,
   ): Promise<WalletResponseDto> {
-    return await this.creditWalletUseCase.execute(req.userId as string, body.amountInMainUnit);
+    return await this.creditWalletUseCase.execute(req.userId as string, body.amountInMainUnit, demoSessionId);
   }
 }

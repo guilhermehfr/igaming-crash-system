@@ -3,6 +3,7 @@ import { Money } from './money.vo';
 export class Wallet {
   private _id: string;
   private _userId: string;
+  private _demoSessionId: string | null;
   private _balance: Money;
   private _createdAt: Date;
   private _updatedAt: Date;
@@ -11,11 +12,13 @@ export class Wallet {
     id: string,
     userId: string,
     balance: Money,
+    demoSessionId: string | null = null,
     createdAt: Date = new Date(),
     updatedAt: Date = new Date(),
   ) {
     this._id = id;
     this._userId = userId;
+    this._demoSessionId = demoSessionId;
     this._balance = balance;
     this._createdAt = createdAt;
     this._updatedAt = updatedAt;
@@ -25,8 +28,9 @@ export class Wallet {
     id: string,
     userId: string,
     initialBalance: Money = Money.zero(),
+    demoSessionId: string | null = null,
   ): Wallet {
-    return new Wallet(id, userId, initialBalance);
+    return new Wallet(id, userId, initialBalance, demoSessionId);
   }
 
   get id(): string {
@@ -35,6 +39,10 @@ export class Wallet {
 
   get userId(): string {
     return this._userId;
+  }
+
+  get demoSessionId(): string | null {
+    return this._demoSessionId;
   }
 
   get balance(): Money {
