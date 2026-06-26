@@ -1,6 +1,9 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { CrashHistoryPills } from '@/components/game/CrashHistoryPills';
+import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api';
+import { config } from '@/config';
 
 const mockHistory = [
   { multiplier: 3.45, busted: false },
@@ -16,7 +19,22 @@ const mockHistory = [
 ];
 
 export function TopBar() {
+  const { user } = useAuth();
   const [pillsOpen, setPillsOpen] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
+
+  const fetchBalance = useCallback(async () => {
+    if (!user) return;
+    const res = await apiFetch(`${config.apiUrl}/wallets/${user.id}`);
+    if (res.ok) {
+      const data = await res.json();
+      setBalance(data.balanceInMainUnit);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchBalance();
+  }, [fetchBalance]);
 
   return (
     <header className="border-b border-slate-800/60 px-4 py-3 lg:px-6">
@@ -26,10 +44,12 @@ export function TopBar() {
             CRASH SYSTEM
           </span>
 
-          <span className="hidden lg:flex items-center gap-1.5 rounded-full bg-neon-green/10 border border-neon-green/30 px-3 py-1 text-xs font-medium text-neon-green">
-            <span className="size-1.5 rounded-full bg-neon-green" />
-            CONNECTED
-          </span>
+          {user && (
+            <span className="hidden lg:flex items-center gap-1.5 rounded-full bg-neon-green/10 border border-neon-green/30 px-3 py-1 text-xs font-medium text-neon-green">
+              <span className="size-1.5 rounded-full bg-neon-green" />
+              CONNECTED
+            </span>
+          )}
         </div>
 
         <button
@@ -46,8 +66,10 @@ export function TopBar() {
         </div>
 
         <div className="flex items-center gap-4 justify-self-end">
-          <span className="text-xs text-white">OPERATOR_01</span>
-          <span className="text-cyber-green font-semibold text-sm lg:text-base">$1,248.50</span>
+          <span className="text-xs text-white">{user?.username ?? 'OPERATOR'}</span>
+          <span className="text-cyber-green font-semibold text-sm lg:text-base">
+            {balance !== null ? `$${balance.toFixed(2)}` : '---'}
+          </span>
         </div>
       </div>
 

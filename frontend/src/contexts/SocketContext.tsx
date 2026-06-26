@@ -1,14 +1,30 @@
-import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { config } from '@/config';
+import { apiFetch } from '@/lib/api';
+import {
+  cashOutRandomMocks,
+  generateMockBets,
+  loseRemainingMocks,
+  type MockBet,
+} from '@/lib/mock-users';
 
-export type RoundState = 'betting' | 'running' | 'crashed';
+export type RoundState = 'betting' | 'running' | 'crashed' | null;
 
 export type LiveBet = {
   id: string;
   user: string;
+  displayName: string;
   amount: number;
   outcome: { type: 'pending' } | { type: 'cashed'; multiplier: number } | { type: 'lost' };
+};
+
+export type RevealedSeed = {
+  serverSeed: string;
+  serverSeedHash: string;
+  clientSeed: string;
+  nonce: number;
+  timestamp: string;
 };
 
 type SocketContextValue = {
@@ -17,25 +33,122 @@ type SocketContextValue = {
   roundState: RoundState;
   roundNumber: number;
   currentMultiplier: number;
+  seedHash: string;
+  seedHistory: RevealedSeed[];
+  revealSeed: () => Promise<void>;
   connected: boolean;
 };
 
 const SocketContext = createContext<SocketContextValue | null>(null);
 
+function toDisplayName(userId: string, demoSessionId: string | null): string {
+  if (demoSessionId === null) return `Player-${userId.slice(0, 4)}`;
+  return `Guest-${demoSessionId.slice(0, 4)}`;
+}
+
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const roundCountRef = useRef(8291);
+  const roundCountRef = useRef(0);
 
   const [connected, setConnected] = useState(false);
-  const [roundState, setRoundState] = useState<RoundState>('betting');
-  const [currentMultiplier, setCurrentMultiplier] = useState(1.0);
-  const [roundNumber, setRoundNumber] = useState(8291);
+  const [roundState, setRoundState] = useState<RoundState>(null);
+  const [currentMultiplier, setCurrentMultiplier] = useState(0);
+  const [roundNumber, setRoundNumber] = useState(0);
   const [bets, setBets] = useState<LiveBet[]>([]);
+  const [seedHash, setSeedHash] = useState('');
+
+  const [seedHistory, setSeedHistory] = useState<RevealedSeed[]>(() => {
+    try {
+      const raw = sessionStorage.getItem('igaming-seed-history');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const revealSeed = useCallback(async () => {
+    try {
+      const res = await apiFetch(`${config.apiUrl}/games/provably-fair/reveal`, { method: 'POST' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const entry: RevealedSeed = {
+        serverSeed: data.serverSeed,
+        serverSeedHash: data.serverSeedHash,
+        clientSeed: data.clientSeed,
+        nonce: data.nonce,
+        timestamp: new Date().toISOString(),
+      };
+      setSeedHash(data.serverSeedHash);
+      setSeedHistory((prev) => {
+        const updated = [entry, ...prev];
+        sessionStorage.setItem('igaming-seed-history', JSON.stringify(updated));
+        return updated;
+      });
+    } catch {
+      // silently fail
+    }
+  }, []);
+
+  const mockBetsRef = useRef<MockBet[]>([]);
+  const mockTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearMockTimer = useCallback(() => {
+    if (mockTimerRef.current !== null) {
+      clearInterval(mockTimerRef.current);
+      mockTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (roundState === null) return;
+
+    if (roundState === 'betting') {
+      clearMockTimer();
+      const mocks = generateMockBets();
+      mockBetsRef.current = mocks;
+      setBets((prev) => [...mocks.map(mockToLiveBet), ...prev.filter((b) => !b.id.startsWith('mock-'))]);
+    } else if (roundState === 'running') {
+      mockTimerRef.current = setInterval(() => {
+        mockBetsRef.current = cashOutRandomMocks(mockBetsRef.current, currentMultiplier);
+        setBets((prev) => [...mockBetsRef.current.map(mockToLiveBet), ...prev.filter((b) => !b.id.startsWith('mock-'))]);
+      }, 800);
+    } else if (roundState === 'crashed') {
+      clearMockTimer();
+      mockBetsRef.current = loseRemainingMocks(mockBetsRef.current);
+      setBets((prev) => [...mockBetsRef.current.map(mockToLiveBet), ...prev.filter((b) => !b.id.startsWith('mock-'))]);
+    }
+
+    return clearMockTimer;
+  }, [roundState, clearMockTimer, currentMultiplier]);
 
   useEffect(() => {
     const url = config.wsUrl || undefined;
     const socket = io(url, { transports: ['websocket', 'polling'] });
 
-    socket.on('connect', () => setConnected(true));
+    socket.on('connect', () => {
+      setConnected(true);
+
+      apiFetch(`${config.apiUrl}/games/provably-fair`)
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          if (data?.serverSeedHash) setSeedHash(data.serverSeedHash);
+        })
+        .catch(() => {});
+
+      apiFetch(`${config.apiUrl}/games/current`)
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          if (!data) return;
+          const state = data.state.toLowerCase() as RoundState;
+          setRoundState(state);
+          setCurrentMultiplier(data.currentMultiplier);
+          if (state === 'betting') {
+            roundCountRef.current += 1;
+            setRoundNumber(roundCountRef.current);
+          }
+        })
+        .catch(() => {});
+    });
+
     socket.on('disconnect', () => setConnected(false));
 
     socket.on(
@@ -46,7 +159,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         if (state === 'betting') {
           roundCountRef.current += 1;
           setRoundNumber(roundCountRef.current);
-          setCurrentMultiplier(1.0);
+          setCurrentMultiplier(0);
+          setBets((prev) => prev.filter((b) => !b.id.startsWith('mock-')));
         }
       },
     );
@@ -59,11 +173,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       'round:bet-placed',
       (data: {
         roundId: string;
-        bet: { id: string; userId: string; amountInMainUnit: number };
+        bet: { id: string; userId: string; demoSessionId: string | null; amountInMainUnit: number };
       }) => {
         const newBet: LiveBet = {
           id: data.bet.id,
           user: data.bet.userId,
+          displayName: toDisplayName(data.bet.userId, data.bet.demoSessionId),
           amount: data.bet.amountInMainUnit,
           outcome: { type: 'pending' },
         };
@@ -75,7 +190,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       'round:bet-cashed-out',
       (data: {
         roundId: string;
-        bet: { id: string; userId: string; multiplier: number | null };
+        bet: { id: string; userId: string; demoSessionId: string | null; multiplier: number | null };
       }) => {
         setBets((prev) =>
           prev.map((b) =>
@@ -93,23 +208,27 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      clearMockTimer();
       socket.disconnect();
     };
-  }, []);
+  }, [clearMockTimer]);
 
   const playingCount = bets.filter((b) => b.outcome.type === 'pending').length;
 
   return (
-    <SocketContext.Provider
-      value={{
-        bets,
-        playingCount,
-        roundState,
-        roundNumber,
-        currentMultiplier,
-        connected,
-      }}
-    >
+      <SocketContext.Provider
+        value={{
+          bets,
+          playingCount,
+          roundState,
+          roundNumber,
+          currentMultiplier,
+          seedHash,
+          seedHistory,
+          revealSeed,
+          connected,
+        }}
+      >
       {children}
     </SocketContext.Provider>
   );
@@ -119,4 +238,14 @@ export function useSocket(): SocketContextValue {
   const ctx = useContext(SocketContext);
   if (!ctx) throw new Error('useSocket must be used within <SocketProvider>');
   return ctx;
+}
+
+function mockToLiveBet(m: MockBet): LiveBet {
+  return {
+    id: m.id,
+    user: m.userId,
+    displayName: m.displayName,
+    amount: m.amount,
+    outcome: m.outcome,
+  };
 }

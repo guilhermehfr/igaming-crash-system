@@ -7,7 +7,7 @@ export function LiveBets() {
   const { bets, playingCount } = useSocket();
 
   return (
-    <section className="flex w-[35rem] shrink-0 flex-col overflow-hidden border-r border-slate-800/60 px-6 pt-6">
+    <section className="flex w-[25rem] shrink-0 flex-col overflow-hidden border-r border-slate-800/60 px-6 pt-6">
       {/* Header */}
       <div className="flex items-center justify-between pb-3">
         <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
@@ -47,7 +47,7 @@ export function LiveBets() {
               key={bet.id}
               className={`flex items-center px-3 py-2 text-sm border-b border-slate-800/20 last:border-b-0 ${i % 2 === 0 ? 'bg-slate-800/20' : ''}`}
             >
-              <span className="flex-1 truncate text-slate-300">{bet.user}</span>
+              <span className="flex-1 truncate text-slate-300">{bet.displayName}</span>
               <span className="flex-1 font-medium text-white tabular-nums">${fmt(bet.amount)}</span>
               <span className="flex flex-1 items-center gap-1.5 font-medium tabular-nums text-slate-300">
                 <span className={`inline-block size-1.5 rounded-full ${dotColor}`} />

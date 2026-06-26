@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
-
-type RoundState = 'betting' | 'running' | 'crashed';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api';
+import { config } from '@/config';
+import type { RoundState } from '@/contexts/SocketContext';
 
 type RightPanelProps = {
   roundState: RoundState;
@@ -8,42 +10,260 @@ type RightPanelProps = {
   connected: boolean;
 };
 
-const next: Record<RoundState, RoundState> = {
+const next: Record<string, RoundState> = {
   betting: 'running',
   running: 'crashed',
   crashed: 'betting',
 };
 
-const mock = {
-  betting: { bet: 10.0, payout: 0, multiplier: 1.0, inPosition: false, busted: false },
-  running: { bet: 10.0, payout: 25.0, multiplier: 2.5, inPosition: true, busted: false },
-  crashed: { bet: 10.0, payout: 0, multiplier: 3.45, inPosition: false, busted: true },
-};
-
 export function RightPanel({ roundState, setRoundState, connected }: RightPanelProps) {
-  const data = mock[roundState];
+  const { user } = useAuth();
   const [betAmount, setBetAmount] = useState(10.0);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [myBetId, setMyBetId] = useState<string | null>(null);
+  const [myBetAmount, setMyBetAmount] = useState<number>(0);
+  const [myBetMultiplier, setMyBetMultiplier] = useState<number | null>(null);
+  const [myBetState, setMyBetState] = useState<'none' | 'pending' | 'cashed_out' | 'lost'>('none');
+  const [actionLoading, setActionLoading] = useState(false);
+  const balanceLoadingRef = useRef(false);
+
+  const fetchBalance = useCallback(async () => {
+    if (!user || balanceLoadingRef.current) return;
+    balanceLoadingRef.current = true;
+    try {
+      const res = await apiFetch(`${config.apiUrl}/wallets/${user.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setBalance(data.balanceInMainUnit);
+      }
+    } catch {
+    } finally {
+      balanceLoadingRef.current = false;
+    }
+  }, [user]);
 
   useEffect(() => {
-    setBetAmount(mock[roundState].bet);
+    if (user) fetchBalance();
+  }, [user, fetchBalance]);
+
+  useEffect(() => {
+    if (roundState === 'betting') {
+      setMyBetId(null);
+      setMyBetState('none');
+      setMyBetAmount(0);
+      setMyBetMultiplier(null);
+    }
   }, [roundState]);
 
-  const positionLabel =
-    roundState === 'betting' ? 'No Position' : roundState === 'running' ? 'In Position' : 'CRASH';
-  const dotColor =
-    roundState === 'running'
-      ? 'bg-neon-green'
-      : roundState === 'crashed'
-        ? 'bg-loss-red'
-        : 'bg-slate-500';
-  const dotGlow = roundState === 'running' ? 'shadow-[0_0_6px_theme(colors.neon-green/40)]' : '';
+  useEffect(() => {
+    if (roundState === 'crashed') {
+      if (myBetState === 'pending') {
+        setMyBetState('lost');
+      }
+    }
+  }, [roundState, myBetState]);
 
-  const inputDisabled = roundState !== 'betting';
-  const inputOpacity = inputDisabled ? 'opacity-40' : '';
+  const handlePlaceBet = async () => {
+    if (!user || actionLoading) return;
+    setActionLoading(true);
+    try {
+      const res = await apiFetch(
+        `${config.apiUrl}/games/bets`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amountInMainUnit: betAmount }),
+        },
+      );
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('Place bet failed:', text);
+        return;
+      }
+      const data = await res.json();
+      setMyBetId(data.id);
+      setMyBetAmount(data.amountInMainUnit);
+      setMyBetState('pending');
+      await fetchBalance();
+    } catch (err) {
+      console.error('Place bet error:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCashOut = async () => {
+    if (!myBetId || !user || actionLoading) return;
+    setActionLoading(true);
+    try {
+      const res = await apiFetch(
+        `${config.apiUrl}/games/bets/${myBetId}/cash-out`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ multiplier: currentMultiplierRef.current ?? 1.0 }),
+        },
+      );
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('Cash out failed:', text);
+        return;
+      }
+      const data = await res.json();
+      setMyBetState('cashed_out');
+      setMyBetMultiplier(data.multiplier);
+      await fetchBalance();
+    } catch (err) {
+      console.error('Cash out error:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const showingBetAmount = myBetState !== 'none' ? myBetAmount : betAmount;
+  const busted = myBetState === 'lost';
+
+  let winnings = 0;
+  if (myBetState === 'cashed_out' && myBetMultiplier) {
+    winnings = myBetAmount * myBetMultiplier;
+  }
+
+  if (!connected) {
+    return (
+      <aside className="flex w-[25rem] shrink-0 flex-col border-l border-slate-800/60 bg-deep-slate/80">
+        <PanelContent
+          roundState={roundState ?? 'betting'}
+          betAmount={betAmount}
+          setBetAmount={setBetAmount}
+          balance={balance}
+          myBetState={myBetState}
+          showingBetAmount={showingBetAmount}
+          showPayout={false}
+          busted={false}
+          winnings={0}
+          actionLoading={false}
+          handlePlaceBet={() => {}}
+          handleCashOut={() => {}}
+          connected={false}
+          setRoundState={setRoundState}
+          cashOutMultiplier={1.0}
+          notReady={false}
+        />
+      </aside>
+    );
+  }
 
   return (
-    <aside className="flex w-[35rem] shrink-0 flex-col border-l border-slate-800/60 bg-deep-slate/80">
-      {/* Position status */}
+    <aside className="flex w-[25rem] shrink-0 flex-col border-l border-slate-800/60 bg-deep-slate/80">
+      <PanelContent
+        roundState={roundState ?? 'betting'}
+        betAmount={betAmount}
+        setBetAmount={setBetAmount}
+        balance={balance}
+        myBetState={myBetState}
+        showingBetAmount={showingBetAmount}
+        showPayout={myBetState === 'cashed_out' || myBetState === 'lost'}
+        busted={busted}
+        winnings={winnings}
+        actionLoading={actionLoading}
+        handlePlaceBet={handlePlaceBet}
+        handleCashOut={handleCashOut}
+        connected={true}
+        setRoundState={() => {}}
+        cashOutMultiplier={currentMultiplierRef.current ?? 1.0}
+        notReady={roundState === null}
+      />
+    </aside>
+  );
+}
+
+const currentMultiplierRef = { current: 1.0 };
+export function setCurrentMultiplierRef(m: number) {
+  currentMultiplierRef.current = m;
+}
+
+type PanelContentProps = {
+  roundState: 'betting' | 'running' | 'crashed';
+  betAmount: number;
+  setBetAmount: (n: number | ((prev: number) => number)) => void;
+  balance: number | null;
+  myBetState: 'none' | 'pending' | 'cashed_out' | 'lost';
+  showingBetAmount: number;
+  showPayout: boolean;
+  busted: boolean;
+  winnings: number;
+  actionLoading: boolean;
+  handlePlaceBet: () => void;
+  handleCashOut: () => void;
+  connected: boolean;
+  setRoundState: (s: RoundState) => void;
+  cashOutMultiplier: number;
+  notReady: boolean;
+};
+
+function PanelContent({
+  roundState,
+  betAmount,
+  setBetAmount,
+  balance,
+  myBetState,
+  showingBetAmount,
+  showPayout,
+  busted,
+  winnings,
+  actionLoading,
+  handlePlaceBet,
+  handleCashOut,
+  connected,
+  setRoundState,
+  cashOutMultiplier,
+  notReady,
+}: PanelContentProps) {
+  const positionLabel =
+    busted ? 'BUSTED'
+    : myBetState === 'cashed_out' ? 'CASHED OUT'
+    : myBetState === 'pending' ? 'In Position'
+    : roundState === 'betting' ? 'No Position'
+    : roundState === 'running' ? 'In Position'
+    : roundState === 'crashed' ? 'BUSTED'
+    : 'No Position';
+
+  const dotColor =
+    busted || myBetState === 'lost' ? 'bg-loss-red'
+    : myBetState === 'cashed_out' ? 'bg-neon-green'
+    : myBetState === 'pending' ? 'bg-neon-green'
+    : roundState === 'running' ? 'bg-neon-green'
+    : roundState === 'crashed' ? 'bg-loss-red'
+    : 'bg-slate-500';
+
+  const dotGlow = dotColor === 'bg-neon-green' ? 'shadow-[0_0_6px_theme(colors.neon-green/40)]' : '';
+
+  const inputDisabled = roundState !== 'betting' || !connected || myBetState === 'pending' || notReady;
+  const inputOpacity = inputDisabled ? 'opacity-40' : '';
+
+  const buttonDisabled =
+    notReady ||
+    actionLoading ||
+    (roundState === 'betting' && (myBetState === 'pending' || balance === null || betAmount <= 0)) ||
+    (roundState === 'running' && myBetState !== 'pending');
+
+  const isCrashedState = roundState === 'crashed' || busted;
+  const isRunningState = roundState === 'running' && myBetState === 'pending';
+  const isLoading = notReady && connected;
+
+  return (
+    <>
+      <div className="border-b border-slate-800/60 px-5 py-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+            Balance
+          </span>
+          <span className="text-sm font-semibold text-cyber-green tabular-nums">
+            {balance !== null ? `$${balance.toFixed(2)}` : '---'}
+          </span>
+        </div>
+      </div>
+
       <div className="border-b border-slate-800/60 px-5 py-4">
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
@@ -58,47 +278,57 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
           <span className="text-slate-500">Bet</span>
           <span className="text-right font-medium text-white tabular-nums">
-            ${betAmount.toFixed(2)}
+            ${showingBetAmount.toFixed(2)}
           </span>
-          <span className="text-slate-500">Payout</span>
-          <span
-            className={`text-right font-medium tabular-nums ${data.payout > 0 ? 'text-neon-green' : 'text-slate-400'}`}
-          >
-            {data.payout > 0 ? `+$${data.payout.toFixed(2)}` : '$0.00'}
-          </span>
+          {showPayout && (
+            <>
+              <span className="text-slate-500">Payout</span>
+              <span
+                className={`text-right font-medium tabular-nums ${winnings > 0 ? 'text-neon-green' : 'text-loss-red'}`}
+              >
+                {winnings > 0 ? `+$${winnings.toFixed(2)}` : '$0.00'}
+              </span>
+            </>
+          )}
+          {myBetState === 'pending' && (
+            <>
+              <span className="text-slate-500">Payout</span>
+              <span className="text-right font-medium text-slate-400 tabular-nums">---</span>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Cash Out / Place Bet button */}
       <div className="flex items-center justify-center px-5 py-4">
         <button
           type="button"
+          disabled={buttonDisabled}
+          onClick={isCrashedState && !connected ? () => setRoundState(next[roundState]) : isRunningState ? handleCashOut : handlePlaceBet}
           className={`group relative flex w-full flex-col items-center justify-center rounded-xl border font-heading font-bold tracking-tight transition-all duration-200 ${
-            roundState === 'running'
-              ? 'py-6 border-neon-green/70 bg-neon-green text-deep-slate shadow-[0_0_20px_theme(colors.neon-green/25)] hover:bg-neon-green/90 hover:shadow-[0_0_30px_theme(colors.neon-green/40)] active:scale-[0.97]'
+            isRunningState
+              ? 'py-6 border-neon-green/70 bg-neon-green text-deep-slate shadow-[0_0_20px_theme(colors.neon-green/25)] hover:bg-neon-green/90 hover:shadow-[0_0_30px_theme(colors.neon-green/40)] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed'
               : roundState === 'betting'
-                ? 'py-6 border-slate-600/70 bg-slate-700/60 text-slate-300 hover:border-slate-500/70 hover:bg-slate-700/80 active:scale-[0.97]'
-                : 'py-6 border-loss-red/70 bg-loss-red text-white shadow-[0_0_20px_theme(colors.loss-red/25)] active:scale-[0.97] bg-[linear-gradient(135deg,transparent_28%,rgba(0,0,0,0.2)_28%,rgba(0,0,0,0.2)_32%,transparent_32%,transparent_64%,rgba(0,0,0,0.15)_64%,rgba(0,0,0,0.15)_68%,transparent_68%)]'
+                ? 'py-6 border-slate-600/70 bg-slate-700/60 text-slate-300 hover:border-slate-500/70 hover:bg-slate-700/80 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed'
+                : 'py-6 border-loss-red/70 bg-loss-red text-white shadow-[0_0_20px_theme(colors.loss-red/25)] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed bg-[linear-gradient(135deg,transparent_28%,rgba(0,0,0,0.2)_28%,rgba(0,0,0,0.2)_32%,transparent_32%,transparent_64%,rgba(0,0,0,0.15)_64%,rgba(0,0,0,0.15)_68%,transparent_68%)]'
           }`}
         >
           <>
             <span className="text-3xl tracking-wide text-center">
-              {roundState === 'betting'
-                ? 'PLACE BET'
-                : roundState === 'running'
-                  ? 'CASH OUT'
-                  : 'CRASH'}
+              {actionLoading ? '...' :
+                isLoading ? 'LOADING'
+                : isRunningState ? 'CASH OUT'
+                : roundState === 'betting' ? 'PLACE BET'
+                : 'CRASH'}
             </span>
-            {roundState !== 'betting' && (
+            {isRunningState && (
               <span className="mt-1 text-sm font-medium text-center opacity-80">
-                @ {data.multiplier.toFixed(2)}x
+                @ {cashOutMultiplier.toFixed(2)}x
               </span>
             )}
           </>
         </button>
       </div>
 
-      {/* Next Bet input */}
       <div className="px-5 pb-4">
         <label
           htmlFor="next-bet"
@@ -123,11 +353,10 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
         </div>
       </div>
 
-      {/* Quick actions */}
       <div className="flex gap-2 px-5 pb-4">
         {[
           { label: '1x', fn: () => setBetAmount(10.0) },
-          { label: '2x', fn: () => setBetAmount((v) => v * 2) },
+          { label: '2x', fn: () => setBetAmount(betAmount * 2) },
           { label: 'MAX', fn: () => setBetAmount(100.0) },
         ].map(({ label, fn }) => (
           <button
@@ -142,7 +371,6 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
         ))}
       </div>
 
-      {/* Dev cycle button or Live indicator */}
       <div className="border-t border-slate-800/60 px-5 py-4">
         {!connected ? (
           <button
@@ -155,10 +383,10 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
         ) : (
           <div className="flex items-center justify-center gap-2 rounded-lg bg-slate-800/40 px-3 py-2 text-xs font-medium text-neon-green">
             <span className="inline-block size-1.5 rounded-full bg-neon-green animate-pulse" />
-            LIVE — {roundState.toUpperCase()}
+            LIVE — {isLoading ? 'SYNCING' : roundState.toUpperCase()}
           </div>
         )}
       </div>
-    </aside>
+    </>
   );
 }
