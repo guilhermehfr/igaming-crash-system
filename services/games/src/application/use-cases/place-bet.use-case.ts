@@ -25,7 +25,6 @@ export class PlaceBetUseCase {
 		try {
 			let currentRound = this.roundLifecycleService.getCurrentRound();
 
-			// If no round exists, create one (first bet triggers the cycle)
 			if (!currentRound) {
 				this.logger.log("No round exists, creating new round...");
 				await this.roundLifecycleService.initializeNewRound();
@@ -45,6 +44,7 @@ export class PlaceBetUseCase {
 				currentRound.id,
 				input.userId,
 				betAmountInCentavos,
+				input.demoSessionId ?? null,
 			);
 
 			await this.roundLifecycleService.placeBet(bet);

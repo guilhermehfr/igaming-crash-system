@@ -107,6 +107,7 @@ export class RoundRepository implements IRoundRepository {
 		entity.id = bet.id;
 		entity.roundId = bet.roundId;
 		entity.playerId = bet.playerId;
+		entity.demoSessionId = bet.demoSessionId;
 		entity.betAmountInCentavos = bet.betAmountInCentavos;
 		entity.state = bet.state;
 		entity.cashOutMultiplier = bet.cashOutMultiplier;
@@ -164,6 +165,7 @@ export class RoundRepository implements IRoundRepository {
 			entity.roundId,
 			entity.playerId,
 			entity.betAmountInCentavos,
+			entity.demoSessionId,
 			entity.state,
 			entity.cashOutMultiplier,
 			entity.winningsInCentavos,

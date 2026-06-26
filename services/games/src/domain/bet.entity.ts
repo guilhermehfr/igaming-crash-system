@@ -10,6 +10,7 @@ export class Bet {
 	private _id: string;
 	private _roundId: string;
 	private _playerId: string;
+	private _demoSessionId: string | null;
 	private _betAmountInCentavos: bigint;
 	private _state: BetState;
 	private _cashOutMultiplier: number | null;
@@ -23,6 +24,7 @@ export class Bet {
 		roundId: string,
 		playerId: string,
 		betAmountInCentavos: bigint,
+		demoSessionId: string | null = null,
 		state: BetState = BetState.PENDING,
 		cashOutMultiplier: number | null = null,
 		winningsInCentavos: bigint | null = null,
@@ -33,6 +35,7 @@ export class Bet {
 		this._id = id;
 		this._roundId = roundId;
 		this._playerId = playerId;
+		this._demoSessionId = demoSessionId;
 		this._betAmountInCentavos = betAmountInCentavos;
 		this._state = state;
 		this._cashOutMultiplier = cashOutMultiplier;
@@ -47,12 +50,13 @@ export class Bet {
 		roundId: string,
 		playerId: string,
 		betAmountInCentavos: bigint,
+		demoSessionId: string | null = null,
 	): Bet {
 		if (betAmountInCentavos <= 0n) {
 			throw new Error("Bet amount must be greater than zero");
 		}
 
-		return new Bet(id, roundId, playerId, betAmountInCentavos);
+		return new Bet(id, roundId, playerId, betAmountInCentavos, demoSessionId);
 	}
 
 	get id(): string {
@@ -65,6 +69,10 @@ export class Bet {
 
 	get playerId(): string {
 		return this._playerId;
+	}
+
+	get demoSessionId(): string | null {
+		return this._demoSessionId;
 	}
 
 	get betAmountInCentavos(): bigint {

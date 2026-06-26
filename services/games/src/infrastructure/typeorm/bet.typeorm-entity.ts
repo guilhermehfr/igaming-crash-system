@@ -22,6 +22,9 @@ export class BetTypeormEntity {
 	@Column("varchar", { length: 255 })
 	playerId!: string;
 
+	@Column("varchar", { length: 36, nullable: true })
+	demoSessionId!: string | null;
+
 	@Column("bigint", { transformer: BigIntTransformer })
 	betAmountInCentavos!: bigint;
 

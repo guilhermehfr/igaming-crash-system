@@ -53,9 +53,8 @@ export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
 	}
 
 	async onModuleInit(): Promise<void> {
-		this.logger.log(
-			"Game service ready. Waiting for first bet to start round...",
-		);
+		this.logger.log("Game service ready. Starting first round...");
+		await this.initializeNewRound();
 	}
 
 	private generateSeed(): string {
@@ -120,6 +119,7 @@ export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
 		await this.roundRepository.save(this.currentRound);
 		this.logger.log(`Round ${roundId} created in BETTING state`);
 
+		this.hasBetBeenPlaced = true;
 		this.startBettingPhase();
 	}
 
@@ -225,17 +225,14 @@ export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
 	private async transitionToCrashed(): Promise<void> {
 		if (!this.currentRound) return;
 
-		if (this.currentRound.state === "CRASHED") {
-			this.logger.warn("Round already crashed, skipping transition");
-			return;
-		}
-
 		this.logger.log(
 			`Round ${this.currentRound.id} crashed at multiplier ${this.currentRound.currentMultiplier}`,
 		);
 
 		try {
-			this.currentRound.crash();
+			if (this.currentRound.state !== "CRASHED") {
+				this.currentRound.crash();
+			}
 
 			await this.roundRepository.save(this.currentRound);
 
@@ -294,6 +291,7 @@ export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
 			this.gamesGateway.emitBetPlaced(this.currentRound.id, {
 				id: bet.id,
 				userId: bet.playerId,
+				demoSessionId: bet.demoSessionId,
 				amountInMainUnit: Number(bet.betAmountInCentavos) / 100,
 				state: bet.state,
 			});
@@ -348,6 +346,7 @@ export class RoundLifecycleService implements OnModuleDestroy, OnModuleInit {
 				this.gamesGateway.emitBetCashedOut(this.currentRound.id, {
 					id: bet.id,
 					userId: bet.playerId,
+					demoSessionId: bet.demoSessionId,
 					multiplier: bet.cashOutMultiplier,
 					winningsInMainUnit: Number(bet.winningsInCentavos ?? 0n) / 100,
 				});

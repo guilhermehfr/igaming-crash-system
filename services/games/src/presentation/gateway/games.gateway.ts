@@ -51,6 +51,7 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
 		bet: {
 			id: string;
 			userId: string;
+			demoSessionId: string | null;
 			amountInMainUnit: number;
 			state: string;
 		},
@@ -66,6 +67,7 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
 		bet: {
 			id: string;
 			userId: string;
+			demoSessionId: string | null;
 			multiplier: number | null;
 			winningsInMainUnit: number;
 		},

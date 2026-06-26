@@ -13,6 +13,7 @@ import {
 	Body,
 	Controller,
 	Get,
+	Headers,
 	HttpException,
 	HttpStatus,
 	Param,
@@ -51,6 +52,7 @@ export class GamesController {
 	async placeBet(
 		@Req() req: Record<string, unknown>,
 		@Body() body: { amountInMainUnit: number; userId?: string },
+		@Headers("x-demo-session") demoSessionId?: string,
 	): Promise<BetResponseDto> {
 		try {
 			if (body.userId) {
@@ -65,6 +67,7 @@ export class GamesController {
 			const dto = new PlaceBetDto(
 				req.userId as string,
 				body.amountInMainUnit,
+				demoSessionId,
 			);
 			return await this.placeBetUseCase.execute(dto);
 		} catch (error) {
