@@ -2,19 +2,20 @@ import { config } from '@/config';
 
 export type AuthResult = {
   userId: string;
-  email: string;
+  username: string;
   token?: string;
 };
 
-export async function keycloakLogin(email: string, password: string): Promise<AuthResult> {
+export async function keycloakLogin(username: string, password: string): Promise<AuthResult> {
+  const base = config.apiUrl || '';
   const params = new URLSearchParams({
     client_id: 'crash-game-client',
     grant_type: 'password',
-    username: email,
+    username,
     password,
   });
 
-  const res = await fetch(`${config.keycloakUrl}/realms/crash-game/protocol/openid-connect/token`, {
+  const res = await fetch(`${base}/auth/realms/crash-game/protocol/openid-connect/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params,
@@ -30,7 +31,7 @@ export async function keycloakLogin(email: string, password: string): Promise<Au
 
   return {
     userId: payload.sub as string,
-    email: (payload.email as string) ?? email,
+    username: (payload.preferred_username as string) ?? username,
     token,
   };
 }

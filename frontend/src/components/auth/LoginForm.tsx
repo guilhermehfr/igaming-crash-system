@@ -5,7 +5,7 @@ import { Input } from '@/components/primitives/Input';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function LoginForm() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login } = useAuth();
@@ -14,13 +14,13 @@ export function LoginForm() {
     e.preventDefault();
     setError('');
 
-    if (!email.trim() || !password.trim()) {
+    if (!username.trim() || !password.trim()) {
       setError('Fill in all fields');
       return;
     }
 
     try {
-      await login(email, password);
+      await login(username, password);
     } catch {
       setError('Invalid credentials');
     }
@@ -41,18 +41,18 @@ export function LoginForm() {
       <form className="space-y-6" onSubmit={handleSubmit}>
         <div className="space-y-5">
           <div>
-            <label htmlFor="email" className="sr-only">
-              Email address
+            <label htmlFor="username" className="sr-only">
+              Username
             </label>
             <Input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              placeholder="Email address"
+              id="username"
+              name="username"
+              type="text"
+              autoComplete="username"
+              placeholder="Username"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
             />
           </div>
           <div>

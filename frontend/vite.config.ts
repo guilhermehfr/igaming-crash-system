@@ -12,6 +12,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      "/auth": "http://localhost:8000",
       "/games": "http://localhost:8000",
       "/wallets": "http://localhost:8000",
       "/socket.io": {
