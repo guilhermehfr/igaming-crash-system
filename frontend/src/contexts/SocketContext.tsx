@@ -2,6 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useR
 import { io } from 'socket.io-client';
 import { config } from '@/config';
 import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   cashOutRandomMocks,
   generateMockBets,
@@ -36,6 +37,8 @@ type SocketContextValue = {
   seedHash: string;
   seedHistory: RevealedSeed[];
   revealSeed: () => Promise<void>;
+  balance: number | null;
+  refreshBalance: (userId: string) => Promise<void>;
   connected: boolean;
 };
 
@@ -55,6 +58,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [roundNumber, setRoundNumber] = useState(0);
   const [bets, setBets] = useState<LiveBet[]>([]);
   const [seedHash, setSeedHash] = useState('');
+  const [balance, setBalance] = useState<number | null>(null);
+  const { user } = useAuth();
 
   const [seedHistory, setSeedHistory] = useState<RevealedSeed[]>(() => {
     try {
@@ -86,6 +91,19 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     } catch {
       // silently fail
     }
+  }, []);
+
+  const userIdRef = useRef<string | null>(null);
+  userIdRef.current = user?.id ?? null;
+
+  const refreshBalance = useCallback(async (userId: string) => {
+    try {
+      const res = await apiFetch(`${config.apiUrl}/wallets/${userId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setBalance(data.balanceInMainUnit);
+      }
+    } catch {}
   }, []);
 
   const mockBetsRef = useRef<MockBet[]>([]);
@@ -147,6 +165,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
           }
         })
         .catch(() => {});
+
+      if (userIdRef.current) refreshBalance(userIdRef.current);
     });
 
     socket.on('disconnect', () => setConnected(false));
@@ -161,6 +181,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
           setRoundNumber(roundCountRef.current);
           setCurrentMultiplier(0);
           setBets((prev) => prev.filter((b) => !b.id.startsWith('mock-')));
+          if (userIdRef.current) refreshBalance(userIdRef.current);
         }
       },
     );
@@ -226,6 +247,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
           seedHash,
           seedHistory,
           revealSeed,
+          balance,
+          refreshBalance,
           connected,
         }}
       >

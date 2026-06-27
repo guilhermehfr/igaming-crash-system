@@ -1,9 +1,8 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CrashHistoryPills } from '@/components/game/CrashHistoryPills';
 import { useAuth } from '@/contexts/AuthContext';
-import { apiFetch } from '@/lib/api';
-import { config } from '@/config';
+import { useSocket } from '@/contexts/SocketContext';
 
 const mockHistory = [
   { multiplier: 3.45, busted: false },
@@ -20,21 +19,8 @@ const mockHistory = [
 
 export function TopBar() {
   const { user } = useAuth();
+  const { balance } = useSocket();
   const [pillsOpen, setPillsOpen] = useState(false);
-  const [balance, setBalance] = useState<number | null>(null);
-
-  const fetchBalance = useCallback(async () => {
-    if (!user) return;
-    const res = await apiFetch(`${config.apiUrl}/wallets/${user.id}`);
-    if (res.ok) {
-      const data = await res.json();
-      setBalance(data.balanceInMainUnit);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    fetchBalance();
-  }, [fetchBalance]);
 
   return (
     <header className="border-b border-slate-800/60 px-4 py-3 lg:px-6">

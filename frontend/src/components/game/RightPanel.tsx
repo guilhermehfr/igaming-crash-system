@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { config } from '@/config';
-import type { RoundState } from '@/contexts/SocketContext';
+import { useSocket, type RoundState } from '@/contexts/SocketContext';
 
 type RightPanelProps = {
   roundState: RoundState;
@@ -18,33 +18,13 @@ const next: Record<string, RoundState> = {
 
 export function RightPanel({ roundState, setRoundState, connected }: RightPanelProps) {
   const { user } = useAuth();
+  const { balance, refreshBalance } = useSocket();
   const [betAmount, setBetAmount] = useState(10.0);
-  const [balance, setBalance] = useState<number | null>(null);
   const [myBetId, setMyBetId] = useState<string | null>(null);
   const [myBetAmount, setMyBetAmount] = useState<number>(0);
   const [myBetMultiplier, setMyBetMultiplier] = useState<number | null>(null);
   const [myBetState, setMyBetState] = useState<'none' | 'pending' | 'cashed_out' | 'lost'>('none');
   const [actionLoading, setActionLoading] = useState(false);
-  const balanceLoadingRef = useRef(false);
-
-  const fetchBalance = useCallback(async () => {
-    if (!user || balanceLoadingRef.current) return;
-    balanceLoadingRef.current = true;
-    try {
-      const res = await apiFetch(`${config.apiUrl}/wallets/${user.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setBalance(data.balanceInMainUnit);
-      }
-    } catch {
-    } finally {
-      balanceLoadingRef.current = false;
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (user) fetchBalance();
-  }, [user, fetchBalance]);
 
   useEffect(() => {
     if (roundState === 'betting') {
@@ -84,7 +64,7 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
       setMyBetId(data.id);
       setMyBetAmount(data.amountInMainUnit);
       setMyBetState('pending');
-      await fetchBalance();
+      await refreshBalance(user.id);
     } catch (err) {
       console.error('Place bet error:', err);
     } finally {
@@ -112,7 +92,7 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
       const data = await res.json();
       setMyBetState('cashed_out');
       setMyBetMultiplier(data.multiplier);
-      await fetchBalance();
+      await refreshBalance(user.id);
     } catch (err) {
       console.error('Cash out error:', err);
     } finally {
@@ -120,7 +100,7 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
     }
   };
 
-  const showingBetAmount = myBetState !== 'none' ? myBetAmount : betAmount;
+  const showingBetAmount = myBetState !== 'none' ? myBetAmount : null;
   const busted = myBetState === 'lost';
 
   let winnings = 0;
@@ -188,7 +168,7 @@ type PanelContentProps = {
   setBetAmount: (n: number | ((prev: number) => number)) => void;
   balance: number | null;
   myBetState: 'none' | 'pending' | 'cashed_out' | 'lost';
-  showingBetAmount: number;
+  showingBetAmount: number | null;
   showPayout: boolean;
   busted: boolean;
   winnings: number;
@@ -278,7 +258,7 @@ function PanelContent({
         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
           <span className="text-slate-500">Bet</span>
           <span className="text-right font-medium text-white tabular-nums">
-            ${showingBetAmount.toFixed(2)}
+            {showingBetAmount !== null ? `$${showingBetAmount.toFixed(2)}` : '$0.00'}
           </span>
           {showPayout && (
             <>
@@ -355,9 +335,9 @@ function PanelContent({
 
       <div className="flex gap-2 px-5 pb-4">
         {[
-          { label: '1x', fn: () => setBetAmount(10.0) },
-          { label: '2x', fn: () => setBetAmount(betAmount * 2) },
-          { label: 'MAX', fn: () => setBetAmount(100.0) },
+          { label: '1x', fn: () => setBetAmount(Math.max(0.50, Math.round((balance ?? 0) * 0.01 * 100) / 100)) },
+          { label: '2x', fn: () => setBetAmount(Math.max(0.50, Math.min(balance ?? 0, Math.round((balance ?? 0) * 0.02 * 100) / 100))) },
+          { label: 'MAX', fn: () => setBetAmount(Math.max(0.50, balance ?? 0)) },
         ].map(({ label, fn }) => (
           <button
             key={label}
