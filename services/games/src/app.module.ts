@@ -47,11 +47,18 @@ import { GamesGateway } from "@presentation/gateway/games.gateway";
 			useFactory: (): CrashPointGenerator => {
 				const override = config.crash.pointOverride;
 				if (override !== undefined) {
-					if (override >= 1.0) {
-						return new FixedCrashPointGenerator(override);
+					if (override >= config.crash.pointMin && override <= config.crash.pointMax) {
+						return new FixedCrashPointGenerator(
+							override,
+							config.crash.pointMin,
+							config.crash.pointMax,
+						);
 					}
 				}
-				return new ProvablyFairCrashPointGenerator();
+				return new ProvablyFairCrashPointGenerator(
+					config.crash.pointMin,
+					config.crash.pointMax,
+				);
 			},
 		},
 		GamesGateway,

@@ -1,5 +1,6 @@
 import { RoundLifecycleService } from "@application/services/round-lifecycle.service";
 import type { IRoundRepository } from "@domain/round.repository";
+import { config } from "@config/configuration";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 
 @Injectable()
@@ -32,8 +33,9 @@ export class VerifyRoundUseCase {
 		}
 
 		const serverSeed = this.roundLifecycleService.getServerSeed();
+		const { pointMin, pointMax } = config.crash;
 
-		const isValid = crashPoint.verifyProvablyFair(serverSeed);
+		const isValid = crashPoint.verifyProvablyFair(serverSeed, pointMin, pointMax);
 
 		this.logger.log(
 			`Round ${roundId} verification: ${isValid ? "✓ VALID" : "✗ INVALID"}`,
@@ -47,8 +49,8 @@ export class VerifyRoundUseCase {
 			clientSeed: crashPoint.clientSeed,
 			nonce: crashPoint.nonce,
 			formula:
-				"hash = HMAC-SHA256(serverSeed, clientSeed-nonce), multiplier = floor((100 * 2^32 - h) / (2^32 - h)) / 100 where h = first 4 bytes of hash",
-			houseEdge: "~1% (instant crash if h % 100 === 0)",
+				"hash = HMAC-SHA256(serverSeed, clientSeed-nonce), multiplier = clamp(min, max, floor((100 * 2^32 - h) / (2^32 - h)) / 100) where h = first 4 bytes of hash",
+			houseEdge: `~1% house edge: h % 100 === 0 maps to min (${pointMin}x). Range: ${pointMin}x–${pointMax}x.`,
 		};
 	}
 }

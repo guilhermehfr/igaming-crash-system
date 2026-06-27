@@ -14,7 +14,10 @@ describe("CrashPoint Value Object", () => {
 
 		it("should reject invalid inputs", () => {
 			expect(() => CrashPoint.create(0.99, "hash", "client", 1)).toThrow(
-				"at least 1.0",
+				"between 1.3 and 10.0",
+			);
+			expect(() => CrashPoint.create(10.5, "hash", "client", 1)).toThrow(
+				"between 1.3 and 10.0",
 			);
 			expect(() => CrashPoint.create(1.5, "", "client", 1)).toThrow("empty");
 			expect(() => CrashPoint.create(1.5, "hash", "", 1)).toThrow("empty");
@@ -25,11 +28,11 @@ describe("CrashPoint Value Object", () => {
 	});
 
 	describe("Helpers", () => {
-		it("should detect instant crash at 1.0", () => {
-			const cp = CrashPoint.create(1.0, "hash", "client", 1);
+		it("should detect instant crash at 1.3", () => {
+			const cp = CrashPoint.create(1.3, "hash", "client", 1);
 
 			expect(cp.isInstantCrash()).toBe(true);
-			expect(cp.hasCrashed(1.0)).toBe(true);
+			expect(cp.hasCrashed(1.3)).toBe(true);
 		});
 
 		it("should detect crash when multiplier >= threshold", () => {
@@ -40,7 +43,7 @@ describe("CrashPoint Value Object", () => {
 			expect(cp.hasCrashed(2.5)).toBe(true);
 		});
 
-		it("should not detect instant crash above 1.0", () => {
+		it("should not detect instant crash above 1.3", () => {
 			const cp = CrashPoint.create(1.5, "hash", "client", 1);
 
 			expect(cp.isInstantCrash()).toBe(false);

@@ -81,8 +81,9 @@ function generateCrashPoint(
 
 	const h = parseInt(hash.slice(0, 8), 16);
 	const e = 2 ** 32;
-	const multiplier =
+	const raw =
 		h % 100 === 0 ? 1.0 : Math.floor((100 * e - h) / (e - h)) / 100;
+	const multiplier = Math.min(10.0, Math.max(1.3, raw));
 
 	return { multiplier, hash };
 }

@@ -14,8 +14,9 @@ describe("CrashPoint Provably Fair Verification", () => {
 
 		const h = parseInt(hash.slice(0, 8), 16);
 		const e = 2 ** 32;
-		const multiplier =
+		const raw =
 			h % 100 === 0 ? 1.0 : Math.floor((100 * e - h) / (e - h)) / 100;
+		const multiplier = Math.min(10.0, Math.max(1.3, raw));
 
 		return { multiplier, hash, serverSeed };
 	}
@@ -44,8 +45,8 @@ describe("CrashPoint Provably Fair Verification", () => {
 			const serverSeed = randomBytes(32).toString("hex");
 			const { multiplier, hash } = generateCrashPoint(serverSeed);
 
-			if (multiplier === 1.0) {
-				const cp = CrashPoint.create(1.0, hash, clientSeed, nonce);
+			if (multiplier === 1.3) {
+				const cp = CrashPoint.create(1.3, hash, clientSeed, nonce);
 				expect(cp.verifyProvablyFair(serverSeed)).toBe(true);
 				expect(cp.isInstantCrash()).toBe(true);
 				found = true;

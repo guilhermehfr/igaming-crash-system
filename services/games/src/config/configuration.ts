@@ -42,6 +42,8 @@ export const config = {
 			process.env.RABBITMQ_URL ?? "amqp://admin:admin@localhost:5672",
 	},
 	crash: {
+		pointMin: parseFloat(process.env.CRASH_POINT_MIN || "1.3"),
+		pointMax: parseFloat(process.env.CRASH_POINT_MAX || "10.0"),
 		pointOverride:
 			process.env.CRASH_POINT_OVERRIDE !== undefined
 				? parseFloat(process.env.CRASH_POINT_OVERRIDE)

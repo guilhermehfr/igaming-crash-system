@@ -24,8 +24,8 @@ export class CrashPoint {
 		clientSeed: string,
 		nonce: number,
 	): CrashPoint {
-		if (multiplier < 1.0) {
-			throw new Error("Crash point multiplier must be at least 1.0");
+		if (multiplier < 1.3 || multiplier > 10.0) {
+			throw new Error("Crash point multiplier must be between 1.3 and 10.0");
 		}
 
 		if (!hash || hash.trim().length === 0) {
@@ -48,7 +48,7 @@ export class CrashPoint {
 		clientSeed: string,
 		nonce: number,
 	): CrashPoint {
-		return CrashPoint.create(1.0, hash, clientSeed, nonce);
+		return CrashPoint.create(1.3, hash, clientSeed, nonce);
 	}
 
 	get multiplier(): number {
@@ -68,14 +68,14 @@ export class CrashPoint {
 	}
 
 	isInstantCrash(): boolean {
-		return this._multiplier === 1.0;
+		return this._multiplier === 1.3;
 	}
 
 	hasCrashed(currentMultiplier: number): boolean {
 		return currentMultiplier >= this._multiplier;
 	}
 
-	verifyProvablyFair(serverSeed: string): boolean {
+	verifyProvablyFair(serverSeed: string, min = 1.3, max = 10.0): boolean {
 		try {
 			const combinedSeed = `${this._clientSeed}-${this._nonce}`;
 			const computedHash = createHmac("sha256", serverSeed)
@@ -89,13 +89,12 @@ export class CrashPoint {
 			const h = parseInt(computedHash.slice(0, 8), 16);
 			const e = 2 ** 32;
 
-			if (h % 100 === 0) {
-				return this._multiplier === 1.0;
-			}
+			const rawMultiplier =
+				h % 100 === 0 ? 1.0 : Math.floor((100 * e - h) / (e - h)) / 100;
 
-			const computedMultiplier = Math.floor((100 * e - h) / (e - h)) / 100;
+			const clampedMultiplier = Math.max(min, Math.min(max, rawMultiplier));
 
-			return Math.abs(this._multiplier - computedMultiplier) < 0.01;
+			return Math.abs(this._multiplier - clampedMultiplier) < 0.01;
 		} catch {
 			return false;
 		}

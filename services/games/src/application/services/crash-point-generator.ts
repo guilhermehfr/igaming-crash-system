@@ -3,20 +3,36 @@ export interface CrashPointGenerator {
 }
 
 export class ProvablyFairCrashPointGenerator implements CrashPointGenerator {
+	constructor(
+		private readonly min: number = 1.3,
+		private readonly max: number = 10.0,
+	) {}
+
 	generate(hash: string): number {
 		const h = parseInt(hash.slice(0, 8), 16);
 		const e = 2 ** 32;
 
-		if (h % 100 === 0) return 1.0;
+		const raw =
+			h % 100 === 0 ? 1.0 : Math.floor((100 * e - h) / (e - h)) / 100;
 
-		return Math.floor((100 * e - h) / (e - h)) / 100;
+		return Math.min(this.max, Math.max(this.min, raw));
 	}
 }
 
 export class FixedCrashPointGenerator implements CrashPointGenerator {
-	constructor(private readonly fixedMultiplier: number) {
-		if (Number.isNaN(fixedMultiplier) || fixedMultiplier < 1.0) {
-			throw new Error("Fixed crash point must be at least 1.0");
+	constructor(
+		private readonly fixedMultiplier: number,
+		private readonly min: number = 1.3,
+		private readonly max: number = 10.0,
+	) {
+		if (
+			Number.isNaN(fixedMultiplier) ||
+			fixedMultiplier < this.min ||
+			fixedMultiplier > this.max
+		) {
+			throw new Error(
+				`Fixed crash point must be between ${this.min} and ${this.max}`,
+			);
 		}
 	}
 
