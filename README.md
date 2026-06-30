@@ -1,38 +1,97 @@
-# Igaming Crash System
+<div align="center">
 
-> **🇧🇷 Leia em português:** [README-pt-br.md](README-pt-br.md)
+# 🎲 iGaming Crash System
 
-Real-time multiplayer game system based on the "crash game" model. Players place bets before each round and must cash out before the multiplier collapses.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Stack
+A real-time multiplayer crash game system built with Domain-Driven Design and Hexagonal Architecture. Players place bets before each round and must cash out before the multiplier collapses.
 
-- **Runtime**: Bun
-- **Backend**: NestJS · TypeScript
-- **Database**: PostgreSQL (3 databases: games, wallets, keycloak)
-- **Messaging**: RabbitMQ
-- **Gateway**: Kong (API Gateway)
-- **Authentication**: Keycloak (OIDC)
-- **Real-time**: Socket.io
-- **Infrastructure**: Docker · Docker Compose
+**Backend:** TypeScript · NestJS · Bun · PostgreSQL · RabbitMQ  
+**Frontend:** React · Vite · TypeScript
+
+🌐 _[Leia em Português](README-pt-br.md)_
+
+</div>
 
 ---
 
-## Architecture
+## 📑 Table of Contents
+
+- [Features](#-features)
+- [Tech Stack](#-tech-stack)
+- [Architecture](#-architecture)
+- [Domain Layer](#-domain-layer)
+- [Authentication](#-authentication)
+- [Reliability](#-reliability)
+- [Financial Precision](#-financial-precision)
+- [API (Gateway)](#-api-gateway)
+- [Testing](#-testing)
+- [Getting Started](#-getting-started)
+
+---
+
+## ✨ Features
+
+- **Real-time crash game engine** – Explicit state machine (BETTING → RUNNING → CRASHED) with automatic multiplier progression and crash detection.
+- **Provably fair** – Cryptographic seed chain (server seed hash, client seed, nonce) lets players verify every round's outcome independently.
+- **Event-driven microservices** – Games and Wallets services communicate exclusively via RabbitMQ with idempotent consumers and DLQ-backed retry handling.
+- **Financial precision** – All monetary values stored as BigInt centavos, zero floating-point math in any money operation.
+- **Gateway-enforced auth** – Kong validates JWTs from Keycloak and injects a trusted user identity header; no service trusts client-provided identity directly.
+- **Live multiplier graph** – Canvas-rendered exponential curve with a rocket that follows the curve tip, plus a crash explosion animation.
+- **WebSocket synchronization** – Round state, multiplier updates, and bet events broadcast in real time via Socket.io through the gateway.
+
+---
+
+## 🛠 Tech Stack
+
+### Backend
+
+| Technology | Purpose |
+| --- | --- |
+| [NestJS](https://nestjs.com/) | Application framework for both services |
+| [Bun](https://bun.sh/) | Runtime and test framework |
+| [TypeORM](https://typeorm.io/) | Type-safe database access |
+| [PostgreSQL](https://www.postgresql.org/) | Persistence (3 databases: games, wallets, keycloak) |
+| [RabbitMQ](https://www.rabbitmq.com/) | Async inter-service messaging |
+| [Kong](https://konghq.com/) | API Gateway (routing, JWT enforcement) |
+| [Keycloak](https://www.keycloak.org/) | Identity Provider (OAuth2/OIDC) |
+| [Socket.io](https://socket.io/) | Real-time round and multiplier events |
+
+### Frontend
+
+| Technology | Purpose |
+| --- | --- |
+| [React 19](https://react.dev/) | UI framework |
+| [Vite](https://vite.dev/) | Build tool and dev server |
+| [Tailwind CSS v4](https://tailwindcss.com/) | Styling |
+| [Socket.io Client](https://socket.io/) | Real-time game state |
+| HTML5 Canvas | Multiplier curve and rocket animation |
+
+### Tooling
+
+| Technology | Purpose |
+| --- | --- |
+| [TypeScript](https://www.typescriptlang.org/) | Static typing |
+| [Docker Compose](https://docs.docker.com/compose/) | Container orchestration |
+| [Bun](https://bun.sh/) | Package management & native test runner |
+
+---
+
+## 🧠 Architecture
 
 The system follows **Domain-Driven Design (DDD)** and **Hexagonal Architecture** with strict layer separation.
 
 ### Services
 
 | Service | Port | Purpose |
-|---------|------|---------|
+| --- | --- | --- |
 | **Games** | 4001 | Crash game rounds with state machine (BETTING → RUNNING → CRASHED) |
 | **Wallets** | 4002 | User account balances with monetary precision (BigInt) |
-| **Kong** | 8000 | API Gateway (routes /games → 4001, /wallets → 4002, /socket.io → 4001 WS) |
+| **Kong** | 8000 | API Gateway (routes `/games` → 4001, `/wallets` → 4002, `/socket.io` → 4001 WS) |
 | **Keycloak** | 8080 | Identity Provider (OAuth2/OIDC) |
 | **RabbitMQ** | 5672 | Message broker for async inter-service communication |
 
 ### Layer Structure
-
 ```
 Presentation Layer (HTTP/WebSocket)
         ↓
@@ -45,12 +104,11 @@ Infrastructure Layer (Adapters, DB, Messaging)
 
 ---
 
-## Domain Layer
+## 🎮 Domain Layer
 
 ### Round (Aggregate Root)
 
 Explicit state machine with no state regression:
-
 ```
 BETTING ──startRound()──→ RUNNING ──crash()──→ CRASHED
 ```
@@ -73,7 +131,7 @@ Precision via BigInt (centavos = 1/100 of main unit, no floating-point errors).
 
 ---
 
-## Communication
+## 🔁 Communication
 
 - Inter-service communication via RabbitMQ
 - Decoupled integration based on events
@@ -87,7 +145,7 @@ Precision via BigInt (centavos = 1/100 of main unit, no floating-point errors).
 
 ---
 
-## Authentication
+## 🔐 Authentication
 
 - Keycloak with OIDC protocol
 - JWT Token validation via Kong gateway
@@ -100,7 +158,7 @@ Precision via BigInt (centavos = 1/100 of main unit, no floating-point errors).
 
 ---
 
-## Real-time
+## 🔌 Real-time
 
 WebSockets for round synchronization. Traffic routes through Kong (`/socket.io` → `:8000` → Games `:4001`). In development, Vite proxy handles same-origin WS forwarding to Kong.
 
@@ -114,7 +172,7 @@ WebSockets for round synchronization. Traffic routes through Kong (`/socket.io` 
 
 ---
 
-## Frontend
+## 🖥 Frontend
 
 React 19 application built with Vite 8 and Tailwind 4. All API traffic routes through Kong on port 8000. In development, Vite proxy handles same-origin forwarding (`/games/*`, `/wallets/*`, `/socket.io`) to Kong.
 
@@ -132,16 +190,16 @@ Socket.io connects through Kong. The frontend subscribes to `round:state-changed
 
 ---
 
-## Reliability
+## 🛡 Reliability
 
-- **Idempotent Consumers**: Duplicate events detected via eventId (stored in consumed_events table with unique constraint) → skipped safely
+- **Idempotent Consumers**: Duplicate events detected via eventId (stored in `consumed_events` table with unique constraint) → skipped safely
 - **ACK Only After Success**: Messages acknowledged only after successful event processing + DB commit
 - **at-least-once Delivery**: Failed messages retry up to 3 times with exponential backoff (1s → 2s → 4s)
 - **DLQ Strategy**: Messages exceeding max retries → Dead Letter Queue (7-day retention)
 
 ---
 
-## Financial Precision
+## 💰 Financial Precision
 
 - Values stored strictly as BigInt (centavos)
 - Zero floating-point math used in monetary operations
@@ -150,7 +208,7 @@ Socket.io connects through Kong. The frontend subscribes to `round:state-changed
 
 ---
 
-## API (Gateway)
+## 📡 API (Gateway)
 
 All routes exposed through Kong (port 8000).
 Health endpoints are accessed directly from service ports.
@@ -178,14 +236,14 @@ Health endpoints are accessed directly from service ports.
 
 ---
 
-## Testing
+## 🧪 Testing
 
 - **140 tests total**: 106 unit + 34 E2E
 - Bun native test framework
 - Domain layer thoroughly tested
 - Application layer use cases tested
 
-## API Documentation
+## 📘 API Documentation
 
 Swagger UI available at:
 - Games: `http://localhost:4001/api`
@@ -193,8 +251,7 @@ Swagger UI available at:
 
 ---
 
-## Project Structure
-
+## 📁 Project Structure
 ```
 ├── services/
 │   ├── games/
@@ -233,28 +290,41 @@ Swagger UI available at:
 
 ---
 
-## Getting Started
+## 🚀 Getting Started
 
+### Prerequisites
+
+- [Bun](https://bun.sh/) v1.x
+- [Docker](https://docker.com/) & Docker Compose
+
+### Installation
 ```bash
+git clone https://github.com/guilhermehfr/igaming-crash-system.git
+cd igaming-crash-system
 bun install
+```
+
+### Run the full stack
+```bash
 bun run docker:up
 ```
 
 This command boots up the entire stack automatically (databases, services, gateway, auth, and messaging).
 
-For development of the frontend separately:
+### Frontend development (standalone)
 ```bash
 cd frontend && bun dev
 ```
 
-For production (no direct service ports — traffic only through Kong):
+### Production mode
+No direct service ports — traffic only through Kong:
 ```bash
 bun docker:up:prod
 ```
 
 ---
 
-## Architecture Notes
+## 📌 Architecture Notes
 
 - Independent and fully decoupled microservices
 - Event-driven asynchronous communication
@@ -262,4 +332,11 @@ bun docker:up:prod
 - Explicit state machine in Round aggregate for game logic
 - Frontend consumes the unified API through the gateway + stable WebSocket connection
 - Canvas-based crash graph renderer with requestAnimationFrame loop
-- Env-aware auth headers: dev uses X-User-Id, prod uses JWT Authorization
+- Env-aware auth headers: dev uses `X-User-Id`, prod uses JWT `Authorization`
+
+---
+
+## 👋 Contact
+
+- LinkedIn: [guilhermehe](https://linkedin.com/in/guilhermehe)
+- GitHub: [guilhermehfr](https://github.com/guilhermehfr)
