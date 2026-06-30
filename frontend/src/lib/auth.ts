@@ -7,7 +7,7 @@ export type AuthResult = {
 };
 
 export async function keycloakLogin(username: string, password: string): Promise<AuthResult> {
-  const base = config.apiUrl || '';
+  const base = config.apiUrl;
   const params = new URLSearchParams({
     client_id: 'crash-game-client',
     grant_type: 'password',
