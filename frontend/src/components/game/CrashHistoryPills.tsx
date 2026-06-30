@@ -1,9 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-
-type CrashRound = {
-  multiplier: number;
-  busted: boolean;
-};
+import type { CrashRound } from '@/contexts/SocketContext';
 
 type CrashHistoryPillsProps = {
   history: CrashRound[];
@@ -62,11 +58,13 @@ export function CrashHistoryPills({ history }: CrashHistoryPillsProps) {
       >
         {history.map((i) => (
           <li
-            key={i.multiplier}
+            key={i.id}
             className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
-              i.busted
-                ? 'bg-loss-red/10 border border-loss-red/40 text-loss-red'
-                : 'bg-neon-green/10 border border-neon-green/30 text-neon-green'
+              i.type === 'cashed'
+                ? 'bg-neon-green/10 border border-neon-green/30 text-neon-green'
+                : i.type === 'busted'
+                  ? 'bg-loss-red/10 border border-loss-red/40 text-loss-red'
+                  : 'bg-slate-500/10 border border-slate-500/30 text-slate-500'
             }`}
           >
             {i.multiplier.toFixed(2)}x

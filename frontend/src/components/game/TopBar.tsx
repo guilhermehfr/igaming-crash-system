@@ -4,22 +4,9 @@ import { CrashHistoryPills } from '@/components/game/CrashHistoryPills';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
 
-const mockHistory = [
-  { multiplier: 3.45, busted: false },
-  { multiplier: 1.22, busted: true },
-  { multiplier: 12.05, busted: false },
-  { multiplier: 1.85, busted: true },
-  { multiplier: 1.98, busted: false },
-  { multiplier: 4.5, busted: true },
-  { multiplier: 2.11, busted: false },
-  { multiplier: 1.5, busted: true },
-  { multiplier: 9.5, busted: false },
-  { multiplier: 8.83, busted: true },
-];
-
 export function TopBar() {
   const { user } = useAuth();
-  const { balance } = useSocket();
+  const { balance, crashHistory } = useSocket();
   const [pillsOpen, setPillsOpen] = useState(false);
 
   return (
@@ -43,12 +30,12 @@ export function TopBar() {
           onClick={() => setPillsOpen((v) => !v)}
           className="lg:hidden flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white transition-colors"
         >
-          <span className="bg-slate-800/60 rounded-full px-2 py-0.5">{mockHistory.length}</span>
+          <span className="bg-slate-800/60 rounded-full px-2 py-0.5">{crashHistory.length}</span>
           {pillsOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
         </button>
 
         <div className="hidden lg:flex justify-center">
-          <CrashHistoryPills history={mockHistory} />
+          <CrashHistoryPills history={crashHistory} />
         </div>
 
         <div className="flex items-center gap-4 justify-self-end">
@@ -61,7 +48,7 @@ export function TopBar() {
 
       {pillsOpen && (
         <div className="mt-3 lg:hidden">
-          <CrashHistoryPills history={mockHistory} />
+          <CrashHistoryPills history={crashHistory} />
         </div>
       )}
     </header>
