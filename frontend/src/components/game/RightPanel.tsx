@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { apiFetch } from '@/lib/api';
 import { config } from '@/config';
-import { useSocket, type RoundState } from '@/contexts/SocketContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { type RoundState, useSocket } from '@/contexts/SocketContext';
+import { apiFetch } from '@/lib/api';
 
 type RightPanelProps = {
   roundState: RoundState;
@@ -25,6 +25,7 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
   const [myBetMultiplier, setMyBetMultiplier] = useState<number | null>(null);
   const [myBetState, setMyBetState] = useState<'none' | 'pending' | 'cashed_out' | 'lost'>('none');
   const [actionLoading, setActionLoading] = useState(false);
+  const [betError, setBetError] = useState<string | null>(null);
 
   useEffect(() => {
     if (roundState === 'betting') {
@@ -32,6 +33,7 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
       setMyBetState('none');
       setMyBetAmount(0);
       setMyBetMultiplier(null);
+      setBetError(null);
     }
   }, [roundState]);
 
@@ -47,17 +49,14 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
     if (!user || actionLoading) return;
     setActionLoading(true);
     try {
-      const res = await apiFetch(
-        `${config.apiUrl}/games/bets`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amountInMainUnit: betAmount }),
-        },
-      );
+      const res = await apiFetch(`${config.apiUrl}/games/bets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountInMainUnit: betAmount }),
+      });
       if (!res.ok) {
         const text = await res.text();
-        console.error('Place bet failed:', text);
+        setBetError(text || 'Bet rejected');
         return;
       }
       const data = await res.json();
@@ -76,14 +75,11 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
     if (!myBetId || !user || actionLoading) return;
     setActionLoading(true);
     try {
-      const res = await apiFetch(
-        `${config.apiUrl}/games/bets/${myBetId}/cash-out`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ multiplier: currentMultiplierRef.current ?? 1.0 }),
-        },
-      );
+      const res = await apiFetch(`${config.apiUrl}/games/bets/${myBetId}/cash-out`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ multiplier: currentMultiplierRef.current ?? 1.0 }),
+      });
       if (!res.ok) {
         const text = await res.text();
         console.error('Cash out failed:', text);
@@ -100,9 +96,12 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
     }
   };
 
-  const showingBetAmount = myBetState !== 'none' ? myBetAmount : null;
-  const busted = myBetState === 'lost';
+  const handleBetAmountChange = (n: number | ((prev: number) => number)) => {
+    setBetAmount(n);
+    setBetError(null);
+  };
 
+  const showingBetAmount = myBetState !== 'none' ? myBetAmount : null;
   let winnings = 0;
   if (myBetState === 'cashed_out' && myBetMultiplier) {
     winnings = myBetAmount * myBetMultiplier;
@@ -114,14 +113,14 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
         <PanelContent
           roundState={roundState ?? 'betting'}
           betAmount={betAmount}
-          setBetAmount={setBetAmount}
+          setBetAmount={handleBetAmountChange}
           balance={balance}
           myBetState={myBetState}
           showingBetAmount={showingBetAmount}
           showPayout={false}
-          busted={false}
           winnings={0}
           actionLoading={false}
+          betError={null}
           handlePlaceBet={() => {}}
           handleCashOut={() => {}}
           connected={false}
@@ -138,14 +137,14 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
       <PanelContent
         roundState={roundState ?? 'betting'}
         betAmount={betAmount}
-        setBetAmount={setBetAmount}
+        setBetAmount={handleBetAmountChange}
         balance={balance}
         myBetState={myBetState}
         showingBetAmount={showingBetAmount}
         showPayout={myBetState === 'cashed_out' || myBetState === 'lost'}
-        busted={busted}
         winnings={winnings}
         actionLoading={actionLoading}
+        betError={betError}
         handlePlaceBet={handlePlaceBet}
         handleCashOut={handleCashOut}
         connected={true}
@@ -170,9 +169,9 @@ type PanelContentProps = {
   myBetState: 'none' | 'pending' | 'cashed_out' | 'lost';
   showingBetAmount: number | null;
   showPayout: boolean;
-  busted: boolean;
   winnings: number;
   actionLoading: boolean;
+  betError: string | null;
   handlePlaceBet: () => void;
   handleCashOut: () => void;
   connected: boolean;
@@ -189,9 +188,9 @@ function PanelContent({
   myBetState,
   showingBetAmount,
   showPayout,
-  busted,
   winnings,
   actionLoading,
+  betError,
   handlePlaceBet,
   handleCashOut,
   connected,
@@ -200,35 +199,42 @@ function PanelContent({
   notReady,
 }: PanelContentProps) {
   const positionLabel =
-    busted ? 'BUSTED'
-    : myBetState === 'cashed_out' ? 'CASHED OUT'
-    : myBetState === 'pending' ? 'In Position'
-    : roundState === 'betting' ? 'No Position'
-    : roundState === 'running' ? 'In Position'
-    : roundState === 'crashed' ? 'BUSTED'
-    : 'No Position';
+    myBetState === 'lost'
+      ? 'BUSTED'
+      : myBetState === 'cashed_out'
+        ? 'CASHED OUT'
+        : myBetState === 'pending'
+          ? 'In Position'
+          : 'No Position';
 
   const dotColor =
-    busted || myBetState === 'lost' ? 'bg-loss-red'
-    : myBetState === 'cashed_out' ? 'bg-neon-green'
-    : myBetState === 'pending' ? 'bg-neon-green'
-    : roundState === 'running' ? 'bg-neon-green'
-    : roundState === 'crashed' ? 'bg-loss-red'
-    : 'bg-slate-500';
+    myBetState === 'lost'
+      ? 'bg-loss-red'
+      : myBetState === 'cashed_out'
+        ? 'bg-neon-green'
+        : myBetState === 'pending'
+          ? 'bg-neon-green'
+          : 'bg-slate-500';
 
-  const dotGlow = dotColor === 'bg-neon-green' ? 'shadow-[0_0_6px_theme(colors.neon-green/40)]' : '';
+  const dotGlow =
+    dotColor === 'bg-neon-green' ? 'shadow-[0_0_6px_theme(colors.neon-green/40)]' : '';
 
-  const inputDisabled = roundState !== 'betting' || !connected || myBetState === 'pending' || notReady;
+  const inputDisabled =
+    roundState !== 'betting' || !connected || myBetState === 'pending' || notReady;
   const inputOpacity = inputDisabled ? 'opacity-40' : '';
 
   const buttonDisabled =
     notReady ||
     actionLoading ||
-    (roundState === 'betting' && (myBetState === 'pending' || balance === null || betAmount <= 0)) ||
+    myBetState === 'cashed_out' ||
+    myBetState === 'lost' ||
+    (roundState === 'betting' && myBetState === 'pending') ||
+    (roundState === 'betting' && (balance === null || betAmount <= 0 || betAmount > balance)) ||
     (roundState === 'running' && myBetState !== 'pending');
 
-  const isCrashedState = roundState === 'crashed' || busted;
+  const isCrashedState = roundState === 'crashed' || myBetState === 'lost';
   const isRunningState = roundState === 'running' && myBetState === 'pending';
+  const isRunningButNoBet = roundState === 'running' && myBetState === 'none';
   const isLoading = notReady && connected;
 
   return (
@@ -283,31 +289,65 @@ function PanelContent({
         <button
           type="button"
           disabled={buttonDisabled}
-          onClick={isCrashedState && !connected ? () => setRoundState(next[roundState]) : isRunningState ? handleCashOut : handlePlaceBet}
+          onClick={
+            isCrashedState && !connected
+              ? () => setRoundState(next[roundState])
+              : isRunningState
+                ? handleCashOut
+                : roundState === 'betting'
+                  ? handlePlaceBet
+                  : () => {}
+          }
           className={`group relative flex w-full flex-col items-center justify-center rounded-xl border font-heading font-bold tracking-tight transition-all duration-200 ${
-            isRunningState
-              ? 'py-6 border-neon-green/70 bg-neon-green text-deep-slate shadow-[0_0_20px_theme(colors.neon-green/25)] hover:bg-neon-green/90 hover:shadow-[0_0_30px_theme(colors.neon-green/40)] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed'
-              : roundState === 'betting'
-                ? 'py-6 border-slate-600/70 bg-slate-700/60 text-slate-300 hover:border-slate-500/70 hover:bg-slate-700/80 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed'
-                : 'py-6 border-loss-red/70 bg-loss-red text-white shadow-[0_0_20px_theme(colors.loss-red/25)] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed bg-[linear-gradient(135deg,transparent_28%,rgba(0,0,0,0.2)_28%,rgba(0,0,0,0.2)_32%,transparent_32%,transparent_64%,rgba(0,0,0,0.15)_64%,rgba(0,0,0,0.15)_68%,transparent_68%)]'
+            myBetState === 'cashed_out'
+              ? 'py-6 border-emerald-700/60 bg-emerald-800/60 text-emerald-400 cursor-not-allowed'
+              : myBetState === 'lost' || roundState === 'crashed'
+                ? 'py-6 border-red-800/40 bg-red-950 text-red-400/60 cursor-not-allowed bg-[linear-gradient(135deg,transparent_28%,rgba(0,0,0,0.2)_28%,rgba(0,0,0,0.2)_32%,transparent_32%,transparent_64%,rgba(0,0,0,0.15)_64%,rgba(0,0,0,0.15)_68%,transparent_68%)]'
+                : isRunningState
+                  ? 'py-6 border-neon-green/70 bg-neon-green text-deep-slate shadow-[0_0_20px_theme(colors.neon-green/25)] hover:bg-neon-green/90 hover:shadow-[0_0_30px_theme(colors.neon-green/40)] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed'
+                  : 'py-6 border-slate-600/70 bg-slate-700/60 text-slate-300 hover:border-slate-500/70 hover:bg-slate-700/80 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed'
           }`}
         >
-          <>
-            <span className="text-3xl tracking-wide text-center">
-              {actionLoading ? '...' :
-                isLoading ? 'LOADING'
-                : isRunningState ? 'CASH OUT'
-                : roundState === 'betting' ? 'PLACE BET'
-                : 'CRASH'}
+          <span className="text-3xl tracking-wide text-center">
+            {actionLoading
+              ? '...'
+              : isLoading
+                ? 'LOADING'
+                : myBetState === 'cashed_out'
+                  ? 'CASHED OUT'
+                  : myBetState === 'lost'
+                    ? 'CRASHED'
+                    : roundState === 'crashed'
+                      ? 'CRASHED'
+                      : isRunningState
+                        ? 'CASH OUT'
+                        : isRunningButNoBet
+                          ? 'RUNNING'
+                          : roundState === 'betting'
+                            ? 'PLACE BET'
+                            : ''}
+          </span>
+          {isRunningState && (
+            <span className="mt-1 text-sm font-medium text-center opacity-80">
+              @ {cashOutMultiplier.toFixed(2)}x
             </span>
-            {isRunningState && (
-              <span className="mt-1 text-sm font-medium text-center opacity-80">
-                @ {cashOutMultiplier.toFixed(2)}x
-              </span>
-            )}
-          </>
+          )}
         </button>
       </div>
+
+      {!betError &&
+        betAmount > (balance ?? 0) &&
+        roundState === 'betting' &&
+        myBetState === 'none' && (
+          <div className="px-5 pb-2">
+            <span className="text-sm text-loss-red">Insufficient balance</span>
+          </div>
+        )}
+      {betError && (
+        <div className="px-5 pb-2">
+          <span className="text-sm text-loss-red">{betError}</span>
+        </div>
+      )}
 
       <div className="px-5 pb-4">
         <label
@@ -335,9 +375,21 @@ function PanelContent({
 
       <div className="flex gap-2 px-5 pb-4">
         {[
-          { label: '1x', fn: () => setBetAmount(Math.max(0.50, Math.round((balance ?? 0) * 0.01 * 100) / 100)) },
-          { label: '2x', fn: () => setBetAmount(Math.max(0.50, Math.min(balance ?? 0, Math.round((balance ?? 0) * 0.02 * 100) / 100))) },
-          { label: 'MAX', fn: () => setBetAmount(Math.max(0.50, balance ?? 0)) },
+          {
+            label: '1x',
+            fn: () => setBetAmount(Math.max(0.5, Math.round((balance ?? 0) * 0.01 * 100) / 100)),
+          },
+          {
+            label: '2x',
+            fn: () =>
+              setBetAmount(
+                Math.max(
+                  0.5,
+                  Math.min(balance ?? 0, Math.round((balance ?? 0) * 0.02 * 100) / 100),
+                ),
+              ),
+          },
+          { label: 'MAX', fn: () => setBetAmount(Math.max(0.5, balance ?? 0)) },
         ].map(({ label, fn }) => (
           <button
             key={label}
