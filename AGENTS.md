@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **iGaming Crash System** is a microservices-based betting platform with an explicit state machine for crash game rounds. The codebase uses **Domain-Driven Design (DDD)** and **Hexagonal Architecture** with **Bun** as the runtime and **NestJS** as the application framework.
 
-**Status**: Domain layer ✅ complete (1,247 lines). Application layer ✅ complete (824 lines games + 376 lines wallets). Infrastructure layer ✅ complete (841 lines). Docker environment ✅ operational. Presentation layer: Games ✅ (11 endpoints), Wallets ✅ (5 endpoints). Provably Fair ✅ complete (HMAC seed chain, 4 API endpoints, server seed rotation). Testing ✅ complete (140 tests: 106 unit + 34 E2E). Frontend ✅ complete (game canvas, socket context, auth layer, UI components).
+**Status**: Domain layer ✅ complete (1,247 lines). Application layer ✅ complete (824 lines games + 376 lines wallets). Infrastructure layer ✅ complete (841 lines). Docker environment ✅ operational. Presentation layer: Games ✅ (11 endpoints), Wallets ✅ (5 endpoints). Provably Fair ✅ complete (HMAC seed chain, 4 API endpoints, server seed rotation). Testing ✅ complete (140 tests: 106 unit + 34 E2E). Frontend ✅ complete (game canvas, socket context, auth layer, UI components, place-bet/cash-out API integration, wallet creation on login).
 
 ## Core Architecture
 
@@ -53,7 +53,7 @@ frontend/
 ├── src/
 │   ├── App.tsx               Root: AuthProvider → AppContent (LoginPage | GamePage)
 │   ├── main.tsx              Entry point
-│   ├── config.ts             Env vars config (apiUrl, wsUrl, keycloakUrl, isDev, isProd)
+│   ├── config.ts             Env vars config (apiUrl, isDev)
 │   ├── index.css             Tailwind 4 + custom theme (colors, fonts)
 │   ├── lib/
 │   │   ├── auth.ts           keycloakLogin() — OIDC password grant
@@ -68,11 +68,11 @@ frontend/
 │       ├── brand/
 │       │   └── BrandPanel.tsx Rocket logo + CRASH_SYSTEM heading
 │       ├── game/
-│       │   ├── GameCanvas.tsx  HTML5 Canvas crash graph, exponential curve, rocket, explosion
+│       │   ├── GameCanvas.tsx  HTML5 Canvas crash graph, exponential curve, rocket, explosion, round-state multiplier colors
 │       │   ├── GamePage.tsx    Layout: LiveBets + GameCanvas + RightPanel, dual-mode routing
-│       │   ├── RightPanel.tsx  Position status, bet/cash-out button, bet input, DEV cycle
-│       │   ├── TopBar.tsx      Brand + CrashHistoryPills + user/balance display
-│       │   ├── CrashHistoryPills.tsx  Draggable scrollable pills of past round multipliers
+│       │   ├── RightPanel.tsx  Position status, CRASHED/CASHED OUT/RUNNING button states, place-bet/cash-out API, percentage presets, bet validation, error display
+│       │   ├── TopBar.tsx      Brand + CrashHistoryPills + balance display
+│       │   ├── CrashHistoryPills.tsx  Draggable scrollable pills, per-user bet coloring (cashed/busted/none)
 │       │   └── LiveBets.tsx    Live bet feed from SocketContext
 │       └── primitives/
 │           ├── Button.tsx      tailwind-variants button (primary, ghost, sizes)
@@ -829,11 +829,13 @@ App
 - On network error in dev mode: falls back to static `DEV_USER_ID` UUID (`00000000-0000-0000-0000-000000000001`) — no JWT, no server dependency
 - On 401: throws to form for error display
 - Hydrates from `localStorage` on mount; `isLoading=true` until hydration completes (prevents login flash on refresh)
+- Wallet creation via `ensureWalletCreated()`: uses direct `fetch` (not `apiFetch`) with explicit `X-User-Id` + `X-Demo-Session` headers from function params. Called before `setUser()` to avoid race between socket connect and wallet existence.
+- Dev fallback also creates wallet before `setUser()`
 
-**keycloakLogin** (`frontend/src/lib/auth.ts`): POSTs to `${keycloakUrl}/realms/crash-game/protocol/openid-connect/token` with `grant_type=password`, decodes JWT body (base64), returns `{ userId (sub), email, token }`.
+**keycloakLogin** (`frontend/src/lib/auth.ts`): POSTs to `${config.apiUrl}/auth/realms/crash-game/protocol/openid-connect/token` (via Kong) with `grant_type=password`, decodes JWT body (base64), returns `{ userId (sub), email, token }`.
 
 **apiFetch** (`frontend/src/lib/api.ts`): Wraps `fetch()` with env-aware headers:
-- **Dev** (`config.isDev`): Always sends `X-User-Id` from stored auth (dev Kong passes through without validating JWT)
+- **Dev** (`config.isDev`): Always sends `X-User-Id` from stored auth and `X-Demo-Session` from `sessionStorage` (dev Kong passes through without validating JWT)
 - **Prod** (`config.isProd`): Sends `Authorization: Bearer <token>` only (prod Kong validates JWT, strips client-provided `X-User-Id`, injects trusted `sub`)
 - Never sends both headers in any environment
 
@@ -860,8 +862,8 @@ App
 - `crashed`: Frozen at final multiplier, green→red color transition, explosion animation
 
 **DOM Overlays:**
-- Top: `ROUND #N` label + `SEED HASH: 0f9a...3c2` pill (hardcoded placeholder)
-- Center: Massive multiplier text (`clamp(3rem, 14vw, 9rem)`), color + drop-shadow match round state
+- Top: `ROUND #N` label + seed hash pill with toggle reveal panel
+- Center: Massive multiplier text (`clamp(3rem, 14vw, 9rem)`), neon green during betting/running, loss-red on crash; drop-shadow glow matches round state (green glow running, red glow crashed, none on betting)
 
 **Grid Background:** CSS `repeating-linear-gradient` (0°/90°, 60px pitch, 2.5% opacity lines) on a wrapper `div` behind the canvas.
 
@@ -869,7 +871,7 @@ App
 
 **SocketContext** (`frontend/src/contexts/SocketContext.tsx`, 122 lines): Manages socket.io connection and exposes round state to all game components.
 
-**Connection:** `io(config.wsUrl || undefined, { transports: ['websocket', 'polling'] })`. Empty URL → same-origin via Vite proxy → Kong port 8000.
+**Connection:** `io(undefined, { transports: ['websocket', 'polling'] })`. Empty URL → same-origin via Vite proxy → Kong port 8000.
 
 **Exposed Values:**
 - `bets: LiveBet[]` — live bet feed (id, user, amount, outcome)
@@ -878,13 +880,16 @@ App
 - `roundNumber: number` — auto-incrementing counter
 - `currentMultiplier: number` — latest server multiplier
 - `connected: boolean` — socket connection status
+- `balance: number | null` — user's wallet balance (shared source of truth for TopBar + RightPanel)
+- `refreshBalance: (userId: string) => Promise<void>` — refetch balance from wallets API
+- `crashHistory: CrashRound[]` — list of rounds watched during this session (from `round:crashed` WS events)
 
 **Socket Events Listened:**
-- `round:state-changed` — updates `roundState`, on `betting` increments round counter + resets multiplier
+- `round:state-changed` — updates `roundState`, on `betting` increments round counter + resets multiplier, refreshes balance
 - `round:multiplier-updated` — updates `currentMultiplier`
 - `round:bet-placed` — prepends new bet to list
 - `round:bet-cashed-out` — updates bet outcome to `cashed` with multiplier
-- `round:crashed` — sets `roundState` to `crashed`, freezes multiplier at crash point
+- `round:crashed` — sets `roundState` to `crashed`, freezes multiplier at crash point, appends to crashHistory with user's bet outcome type
 
 ### Dual-Mode GamePage
 
@@ -1041,19 +1046,19 @@ If a Round is stuck or has unexpected behavior:
 - ✅ Game canvas with exponential curve, rocket, explosion animation
 - ✅ Socket.io WebSocket integration with dual-mode fallback (connected/disconnected)
 - ✅ Keycloak auth layer with dev fallback (static UUID when Keycloak unreachable)
+- ✅ Place-bet/cash-out API integration (RightPanel, TopBar, balance context)
+- ✅ Wallet creation on first login (ensureWalletCreated, direct fetch)
 - ✅ Responsive layout (LiveBets sidebar + Canvas center + RightPanel)
 - ✅ Tailwind 4 custom theme (5 colors, 2 fonts)
 - ✅ Primitives (Button, Input via tailwind-variants)
 
 **Remaining for production-readiness**:
-- ❌ Place-bet/cash-out API integration (RightPanel currently uses mock data)
-- ❌ Wallet creation on first login
 - ❌ Provably fair client-side seed verification
 - ❌ Login flow E2E test (with Keycloak running)
 
 ---
 
-**Last Updated**: 2026-06-23  
+**Last Updated**: 2026-06-30  
 **Domain Layer Status**: ✅ Complete (1,247 lines, 7 files)  
 **Application Layer Status**: ✅ Wallets Complete (376 lines, 9 files) | ✅ Games Complete (824 lines, 13 files)  
 **Infrastructure Layer Status**: ✅ Complete (841 lines, 9 files)  

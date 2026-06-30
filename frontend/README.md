@@ -56,13 +56,15 @@ Services are not publicly exposed — only accessible via Kong through the Docke
 ## Auth Flow
 
 ### Development
-Pass `X-User-Id` header directly. Kong forwards it to the service:
+The `apiFetch` helper sends `X-User-Id` from stored auth and `X-Demo-Session` from `sessionStorage`. Kong forwards both to the service:
 
 ```ts
 fetch("/games/current", {
   headers: { "X-User-Id": "player-1" },
 });
 ```
+
+On first login, `AuthContext.ensureWalletCreated()` uses a direct `fetch` (not `apiFetch`) with explicit `X-User-Id` and `X-Demo-Session` headers — no localStorage dependency.
 
 ### Production
 JWT from Keycloak is required. Kong validates the JWT, extracts the `sub` claim, and injects `X-User-Id` + `X-Gateway-Authenticated` headers. Client-provided identity headers are stripped by Kong — spoofing is not possible.
@@ -71,18 +73,17 @@ JWT from Keycloak is required. Kong validates the JWT, extracts the `sub` claim,
 
 | Event | Payload | When |
 |-------|---------|------|
-| `round:state-changed` | `{ roundId, previousState, newState }` | BETTING→RUNNING→CRASHED |
-| `round:multiplier-updated` | `{ multiplier, roundId }` | Every 100ms during RUNNING |
-| `round:bet-placed` | `{ betId, userId, amount }` | Bet placed |
-| `round:bet-cashed-out` | `{ betId, userId, multiplier, winnings }` | Cash out |
-| `round:crashed` | `{ roundId, crashPoint, statistics }` | Round ends |
+| `round:state-changed` | `{ roundId, state, crashPoint }` | BETTING→RUNNING→CRASHED |
+| `round:multiplier-updated` | `{ roundId, multiplier }` | Every 100ms during RUNNING |
+| `round:bet-placed` | `{ roundId, bet: { id, userId, demoSessionId, amountInMainUnit } }` | Bet placed |
+| `round:bet-cashed-out` | `{ roundId, bet: { id, userId, multiplier, winnings, amountInMainUnit } }` | Cash out |
+| `round:crashed` | `{ roundId, crashPointMultiplier, statistics }` | Round ends |
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VITE_API_URL` | `""` | API base URL (empty = same origin via proxy) |
-| `VITE_WS_URL` | `""` | WebSocket server URL (empty = same origin via proxy → Kong) |
+| `VITE_API_URL` | `"http://localhost:8000"` | Kong API gateway (proxies /games, /wallets, /auth, /socket.io) |
 
 ## API Endpoints (via proxy)
 
@@ -102,6 +103,7 @@ JWT from Keycloak is required. Kong validates the JWT, extracts the `sub` claim,
 
 | Method | Path | Description |
 |--------|------|-------------|
+| POST | `/wallets` | Create wallet `{ initialBalanceInMainUnit }` |
 | GET | `/wallets/:userId` | Get wallet |
 | POST | `/wallets/:userId/debit` | Debit balance |
 | POST | `/wallets/:userId/credit` | Credit balance |
