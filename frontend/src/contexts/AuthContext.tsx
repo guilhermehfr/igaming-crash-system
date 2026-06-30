@@ -1,7 +1,6 @@
 import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
 import { config } from '@/config';
 import { keycloakLogin } from '@/lib/auth';
-import { apiFetch } from '@/lib/api';
 
 const AUTH_KEY = 'igaming-auth';
 const DEMO_SESSION_KEY = 'igaming-demo-session';
@@ -52,20 +51,18 @@ function getStoredDemoSessionId(): string | null {
   return sessionStorage.getItem(DEMO_SESSION_KEY);
 }
 
-async function ensureWalletCreated(_userId: string, _demoSessionId: string) {
+async function ensureWalletCreated(userId: string, sessionId: string) {
   try {
-    const res = await apiFetch(
-      `${config.apiUrl}/wallets`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initialBalanceInMainUnit: 1000 }),
+    const res = await fetch(`${config.apiUrl}/wallets`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': userId,
+        'X-Demo-Session': sessionId,
       },
-    );
-    if (res.status === 409) {
-      // wallet already exists for this session, ignore
-      return;
-    }
+      body: JSON.stringify({ initialBalanceInMainUnit: 1000 }),
+    });
+    if (res.status === 409) return;
     if (!res.ok) {
       console.warn('Wallet creation failed:', await res.text());
     }
@@ -89,24 +86,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function login(username: string, password: string) {
     try {
       const result = await keycloakLogin(username, password);
-      const authUser: AuthUser = { id: result.userId, username: result.username, token: result.token };
+      const authUser: AuthUser = {
+        id: result.userId,
+        username: result.username,
+        token: result.token,
+      };
       persistAuth(authUser);
-      setUser(authUser);
 
       const sessionId = generateDemoSessionId();
-      setDemoSessionId(sessionId);
-
       await ensureWalletCreated(result.userId, sessionId);
+      setUser(authUser);
+      setDemoSessionId(sessionId);
     } catch (err) {
       if (config.isDev && err instanceof TypeError) {
         const devUser: AuthUser = { id: crypto.randomUUID(), username };
         persistAuth(devUser);
-        setUser(devUser);
 
         const sessionId = generateDemoSessionId();
-        setDemoSessionId(sessionId);
-
         await ensureWalletCreated(devUser.id, sessionId);
+        setUser(devUser);
+        setDemoSessionId(sessionId);
         return;
       }
       throw err;
