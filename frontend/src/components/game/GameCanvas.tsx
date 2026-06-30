@@ -33,12 +33,8 @@ export function GameCanvas({
 
   const multiplier = currentMultiplier ?? 1.0;
   const displayM = roundState === 'betting' ? 1.0 : multiplier;
-  const textColor =
-    roundState === 'crashed'
-      ? 'text-loss-red'
-      : roundState === 'running'
-        ? 'text-neon-green'
-        : 'text-slate-500';
+
+  const textColor = roundState === 'crashed' ? 'text-loss-red' : 'text-neon-green';
 
   return (
     <div className="relative flex flex-1 overflow-hidden">
@@ -94,6 +90,10 @@ function SeedRevealPanel({
   const [revealing, setRevealing] = useState(false);
 
   const handleClick = async () => {
+    if (expanded) {
+      setExpanded(false);
+      return;
+    }
     if (revealing) return;
     setRevealing(true);
     await revealSeed();
@@ -114,9 +114,12 @@ function SeedRevealPanel({
       </button>
 
       {expanded && seedHistory.length > 0 && (
-        <div className="flex flex-col gap-1 max-h-48 overflow-y-auto rounded-lg border border-slate-700/50 bg-slate-900/90 px-2.5 py-2 w-72">
-          {seedHistory.map((entry, i) => (
-            <div key={entry.serverSeedHash + i} className="flex flex-col gap-0.5 border-b border-slate-700/30 pb-1.5 last:border-0 last:pb-0">
+        <div className="custom-scrollbar flex flex-col gap-1 max-h-48 overflow-y-auto rounded-lg border border-slate-700/50 bg-slate-900/90 px-2.5 py-2 w-72">
+          {seedHistory.map((entry) => (
+            <div
+              key={`${entry.timestamp}-${entry.serverSeedHash}`}
+              className="flex flex-col gap-0.5 border-b border-slate-700/30 pb-1.5 last:border-0 last:pb-0"
+            >
               <span className="text-[10px] text-slate-500">
                 {new Date(entry.timestamp).toLocaleTimeString()}
               </span>

@@ -7,7 +7,15 @@ import type { RoundState } from '@/contexts/SocketContext';
 import { SocketProvider, useSocket } from '@/contexts/SocketContext';
 
 function GamePageContent() {
-  const { roundState, roundNumber, currentMultiplier, connected, seedHash, seedHistory, revealSeed } = useSocket();
+  const {
+    roundState,
+    roundNumber,
+    currentMultiplier,
+    connected,
+    seedHash,
+    seedHistory,
+    revealSeed,
+  } = useSocket();
 
   const [localState, setLocalState] = useState<RoundState>('betting');
   const [localRound, setLocalRound] = useState(8291);

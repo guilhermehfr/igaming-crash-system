@@ -21,3 +21,14 @@
     @apply bg-deep-slate text-slate-200 antialiased font-sans;
   }
 }
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-cyber-green);
+  border-radius: 2px;
+}
