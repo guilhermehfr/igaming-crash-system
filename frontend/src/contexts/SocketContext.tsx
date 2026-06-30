@@ -1,8 +1,16 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { io } from 'socket.io-client';
 import { config } from '@/config';
-import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api';
 import {
   cashOutRandomMocks,
   generateMockBets,
@@ -28,6 +36,12 @@ export type RevealedSeed = {
   timestamp: string;
 };
 
+export type CrashRound = {
+  id: number;
+  multiplier: number;
+  type: 'cashed' | 'busted' | 'none';
+};
+
 type SocketContextValue = {
   bets: LiveBet[];
   playingCount: number;
@@ -40,6 +54,8 @@ type SocketContextValue = {
   balance: number | null;
   refreshBalance: (userId: string) => Promise<void>;
   connected: boolean;
+  crashHistory: CrashRound[];
+  hasBet: boolean;
 };
 
 const SocketContext = createContext<SocketContextValue | null>(null);
@@ -60,6 +76,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [seedHash, setSeedHash] = useState('');
   const [balance, setBalance] = useState<number | null>(null);
   const { user } = useAuth();
+
+  const [crashHistory, setCrashHistory] = useState<CrashRound[]>([]);
+  const [hasBet, setHasBet] = useState(false);
+
+  const betsRef = useRef<LiveBet[]>([]);
+  betsRef.current = bets;
 
   const [seedHistory, setSeedHistory] = useState<RevealedSeed[]>(() => {
     try {
@@ -106,6 +128,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, []);
 
+  useEffect(() => {
+    if (user?.id) {
+      refreshBalance(user.id);
+    }
+  }, [user, refreshBalance]);
+
   const mockBetsRef = useRef<MockBet[]>([]);
   const mockTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -123,37 +151,45 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       clearMockTimer();
       const mocks = generateMockBets();
       mockBetsRef.current = mocks;
-      setBets((prev) => [...mocks.map(mockToLiveBet), ...prev.filter((b) => !b.id.startsWith('mock-'))]);
+      setBets((prev) => [
+        ...mocks.map(mockToLiveBet),
+        ...prev.filter((b) => !b.id.startsWith('mock-')),
+      ]);
     } else if (roundState === 'running') {
       mockTimerRef.current = setInterval(() => {
         mockBetsRef.current = cashOutRandomMocks(mockBetsRef.current, currentMultiplier);
-        setBets((prev) => [...mockBetsRef.current.map(mockToLiveBet), ...prev.filter((b) => !b.id.startsWith('mock-'))]);
+        setBets((prev) => [
+          ...mockBetsRef.current.map(mockToLiveBet),
+          ...prev.filter((b) => !b.id.startsWith('mock-')),
+        ]);
       }, 800);
     } else if (roundState === 'crashed') {
       clearMockTimer();
       mockBetsRef.current = loseRemainingMocks(mockBetsRef.current);
-      setBets((prev) => [...mockBetsRef.current.map(mockToLiveBet), ...prev.filter((b) => !b.id.startsWith('mock-'))]);
+      setBets((prev) => [
+        ...mockBetsRef.current.map(mockToLiveBet),
+        ...prev.filter((b) => !b.id.startsWith('mock-')),
+      ]);
     }
 
     return clearMockTimer;
   }, [roundState, clearMockTimer, currentMultiplier]);
 
   useEffect(() => {
-    const url = config.wsUrl || undefined;
-    const socket = io(url, { transports: ['websocket', 'polling'] });
+    const socket = io(undefined, { transports: ['websocket', 'polling'] });
 
     socket.on('connect', () => {
       setConnected(true);
 
       apiFetch(`${config.apiUrl}/games/provably-fair`)
-        .then((r) => r.ok ? r.json() : null)
+        .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (data?.serverSeedHash) setSeedHash(data.serverSeedHash);
         })
         .catch(() => {});
 
       apiFetch(`${config.apiUrl}/games/current`)
-        .then((r) => r.ok ? r.json() : null)
+        .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (!data) return;
           const state = data.state.toLowerCase() as RoundState;
@@ -177,6 +213,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         const state = data.state.toLowerCase() as RoundState;
         setRoundState(state);
         if (state === 'betting') {
+          setHasBet(false);
           roundCountRef.current += 1;
           setRoundNumber(roundCountRef.current);
           setCurrentMultiplier(0);
@@ -196,6 +233,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         roundId: string;
         bet: { id: string; userId: string; demoSessionId: string | null; amountInMainUnit: number };
       }) => {
+        if (data.bet.userId === userIdRef.current) setHasBet(true);
         const newBet: LiveBet = {
           id: data.bet.id,
           user: data.bet.userId,
@@ -211,7 +249,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       'round:bet-cashed-out',
       (data: {
         roundId: string;
-        bet: { id: string; userId: string; demoSessionId: string | null; multiplier: number | null };
+        bet: {
+          id: string;
+          userId: string;
+          demoSessionId: string | null;
+          multiplier: number | null;
+        };
       }) => {
         setBets((prev) =>
           prev.map((b) =>
@@ -226,32 +269,45 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     socket.on('round:crashed', (data: { roundId: string; crashPoint: number }) => {
       setRoundState('crashed');
       setCurrentMultiplier(data.crashPoint);
+
+      const userBet = betsRef.current.find((b) => b.user === userIdRef.current);
+      const type: CrashRound['type'] = !userBet
+        ? 'none'
+        : userBet.outcome.type === 'cashed'
+          ? 'cashed'
+          : 'busted';
+
+      setCrashHistory((prev) =>
+        [{ id: Date.now(), multiplier: Number(data.crashPoint), type }, ...prev].slice(0, 50),
+      );
     });
 
     return () => {
       clearMockTimer();
       socket.disconnect();
     };
-  }, [clearMockTimer]);
+  }, [clearMockTimer, refreshBalance]);
 
   const playingCount = bets.filter((b) => b.outcome.type === 'pending').length;
 
   return (
-      <SocketContext.Provider
-        value={{
-          bets,
-          playingCount,
-          roundState,
-          roundNumber,
-          currentMultiplier,
-          seedHash,
-          seedHistory,
-          revealSeed,
-          balance,
-          refreshBalance,
-          connected,
-        }}
-      >
+    <SocketContext.Provider
+      value={{
+        bets,
+        playingCount,
+        roundState,
+        roundNumber,
+        currentMultiplier,
+        seedHash,
+        seedHistory,
+        revealSeed,
+        balance,
+        refreshBalance,
+        connected,
+        crashHistory,
+        hasBet,
+      }}
+    >
       {children}
     </SocketContext.Provider>
   );
