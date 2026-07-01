@@ -12,6 +12,7 @@ export type MockBet = {
   userId: string;
   displayName: string;
   amount: number;
+  cashOutAt: number | null;
   outcome: { type: 'pending' } | { type: 'cashed'; multiplier: number } | { type: 'lost' };
 };
 
@@ -29,11 +30,18 @@ export function generateMockBets(): MockBet[] {
 
   return selected.map((user) => {
     mockIdCounter++;
+    const r = Math.random();
+    let cashOutAt: number | null;
+    if (r < 0.35) cashOutAt = randBetween(1.01, 1.2);
+    else if (r < 0.55) cashOutAt = randBetween(1.21, 2.0);
+    else if (r < 0.70) cashOutAt = randBetween(2.01, 5.0);
+    else cashOutAt = null;
     return {
       id: `mock-${Date.now()}-${mockIdCounter}`,
       userId: user.userId,
       displayName: user.displayName,
       amount: randBetween(0.5, 50),
+      cashOutAt,
       outcome: { type: 'pending' as const },
     };
   });
@@ -42,8 +50,7 @@ export function generateMockBets(): MockBet[] {
 export function cashOutRandomMocks(bets: MockBet[], currentMultiplier: number): MockBet[] {
   return bets.map((b) => {
     if (b.outcome.type !== 'pending') return b;
-    const cashOutChance = currentMultiplier > 1.5 ? 0.5 + (currentMultiplier - 1.5) * 0.1 : 0.2;
-    if (Math.random() < cashOutChance) {
+    if (b.cashOutAt !== null && currentMultiplier >= b.cashOutAt) {
       return { ...b, outcome: { type: 'cashed' as const, multiplier: currentMultiplier } };
     }
     return b;

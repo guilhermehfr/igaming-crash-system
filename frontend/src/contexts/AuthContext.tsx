@@ -3,7 +3,6 @@ import { config } from '@/config';
 import { keycloakLogin } from '@/lib/auth';
 
 const AUTH_KEY = 'igaming-auth';
-const DEMO_SESSION_KEY = 'igaming-demo-session';
 
 export type AuthUser = {
   id: string;
@@ -13,7 +12,6 @@ export type AuthUser = {
 
 type AuthContextValue = {
   user: AuthUser | null;
-  demoSessionId: string | null;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
@@ -27,7 +25,6 @@ function persistAuth(data: AuthUser) {
 
 function clearAuth() {
   localStorage.removeItem(AUTH_KEY);
-  sessionStorage.removeItem(DEMO_SESSION_KEY);
 }
 
 function hydrateAuth(): AuthUser | null {
@@ -41,24 +38,13 @@ function hydrateAuth(): AuthUser | null {
   }
 }
 
-function generateDemoSessionId(): string {
-  const id = crypto.randomUUID();
-  sessionStorage.setItem(DEMO_SESSION_KEY, id);
-  return id;
-}
-
-function getStoredDemoSessionId(): string | null {
-  return sessionStorage.getItem(DEMO_SESSION_KEY);
-}
-
-async function ensureWalletCreated(userId: string, sessionId: string) {
+async function ensureWalletCreated(userId: string) {
   try {
     const res = await fetch(`${config.apiUrl}/wallets`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-User-Id': userId,
-        'X-Demo-Session': sessionId,
       },
       body: JSON.stringify({ initialBalanceInMainUnit: 1000 }),
     });
@@ -73,13 +59,11 @@ async function ensureWalletCreated(userId: string, sessionId: string) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [demoSessionId, setDemoSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const stored = hydrateAuth();
     setUser(stored);
-    setDemoSessionId(getStoredDemoSessionId());
     setIsLoading(false);
   }, []);
 
@@ -93,19 +77,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
       persistAuth(authUser);
 
-      const sessionId = generateDemoSessionId();
-      await ensureWalletCreated(result.userId, sessionId);
+      await ensureWalletCreated(result.userId);
       setUser(authUser);
-      setDemoSessionId(sessionId);
     } catch (err) {
       if (config.isDev && err instanceof TypeError) {
         const devUser: AuthUser = { id: crypto.randomUUID(), username };
         persistAuth(devUser);
 
-        const sessionId = generateDemoSessionId();
-        await ensureWalletCreated(devUser.id, sessionId);
+        await ensureWalletCreated(devUser.id);
         setUser(devUser);
-        setDemoSessionId(sessionId);
         return;
       }
       throw err;
@@ -115,11 +95,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function logout() {
     clearAuth();
     setUser(null);
-    setDemoSessionId(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, demoSessionId, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

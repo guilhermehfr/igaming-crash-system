@@ -109,7 +109,7 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
 
   if (!connected) {
     return (
-      <aside className="flex w-[25rem] shrink-0 flex-col border-l border-slate-800/60 bg-deep-slate/80">
+      <aside className="flex w-full md:w-[25rem] shrink-0 flex-col border-t md:border-l border-slate-800/60 bg-deep-slate/80">
         <PanelContent
           roundState={roundState ?? 'betting'}
           betAmount={betAmount}
@@ -133,7 +133,7 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
   }
 
   return (
-    <aside className="flex w-[25rem] shrink-0 flex-col border-l border-slate-800/60 bg-deep-slate/80">
+    <aside className="flex w-full md:w-[25rem] shrink-0 flex-col border-t md:border-l border-slate-800/60 bg-deep-slate/80">
       <PanelContent
         roundState={roundState ?? 'betting'}
         betAmount={betAmount}
@@ -377,7 +377,7 @@ function PanelContent({
         {[
           {
             label: '1x',
-            fn: () => setBetAmount(Math.max(0.5, Math.round((balance ?? 0) * 0.01 * 100) / 100)),
+            fn: () => setBetAmount(Math.max(0.5, Math.min(10, balance ?? 0))),
           },
           {
             label: '2x',
@@ -385,7 +385,7 @@ function PanelContent({
               setBetAmount(
                 Math.max(
                   0.5,
-                  Math.min(balance ?? 0, Math.round((balance ?? 0) * 0.02 * 100) / 100),
+                  Math.min(balance ?? Infinity, Math.round(betAmount * 100) * 2 / 100),
                 ),
               ),
           },

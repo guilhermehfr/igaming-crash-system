@@ -7,7 +7,7 @@ export function LiveBets() {
   const { bets, playingCount } = useSocket();
 
   return (
-    <section className="flex w-[25rem] shrink-0 flex-col overflow-hidden border-r border-slate-800/60 px-6 pt-6">
+    <section className="hidden md:flex w-[25rem] shrink-0 flex-col overflow-hidden border-r border-slate-800/60 px-6 pt-6">
       {/* Header */}
       <div className="flex items-center justify-between pb-3">
         <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500">

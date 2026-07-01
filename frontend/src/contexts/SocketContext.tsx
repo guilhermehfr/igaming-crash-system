@@ -71,6 +71,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [roundState, setRoundState] = useState<RoundState>(null);
   const [currentMultiplier, setCurrentMultiplier] = useState(0);
+  const currentMultiplierRef = useRef(0);
+  currentMultiplierRef.current = currentMultiplier;
   const [roundNumber, setRoundNumber] = useState(0);
   const [bets, setBets] = useState<LiveBet[]>([]);
   const [seedHash, setSeedHash] = useState('');
@@ -157,7 +159,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       ]);
     } else if (roundState === 'running') {
       mockTimerRef.current = setInterval(() => {
-        mockBetsRef.current = cashOutRandomMocks(mockBetsRef.current, currentMultiplier);
+        mockBetsRef.current = cashOutRandomMocks(mockBetsRef.current, currentMultiplierRef.current);
         setBets((prev) => [
           ...mockBetsRef.current.map(mockToLiveBet),
           ...prev.filter((b) => !b.id.startsWith('mock-')),
@@ -173,10 +175,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     }
 
     return clearMockTimer;
-  }, [roundState, clearMockTimer, currentMultiplier]);
+  }, [roundState, clearMockTimer]);
 
   useEffect(() => {
-    const socket = io(undefined, { transports: ['websocket', 'polling'] });
+    const socket = io(config.isDev ? undefined : config.apiUrl, { transports: ['websocket', 'polling'] });
 
     socket.on('connect', () => {
       setConnected(true);

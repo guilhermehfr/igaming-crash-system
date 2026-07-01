@@ -58,7 +58,7 @@ export function GameCanvas({
 
       <div className="absolute inset-0 flex items-center justify-center">
         <span
-          className={`font-heading font-bold tabular-nums tracking-tight transition-colors duration-200 ${textColor}`}
+          className={`font-heading font-bold tabular-nums tracking-tight transition-colors duration-200 mt-16 md:mt-0 ${textColor}`}
           style={{
             fontSize: 'clamp(3rem, 14vw, 9rem)',
             lineHeight: 1,

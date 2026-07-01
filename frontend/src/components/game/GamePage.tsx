@@ -35,7 +35,7 @@ function GamePageContent() {
   return (
     <main className="flex min-h-dvh w-full flex-col bg-deep-slate">
       <TopBar />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
         <LiveBets />
         <GameCanvas
           roundState={effectiveState}

@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# TypeScript incremental builds
+*.tsbuildinfo
+
 # Environment
 .env
 .env.*
