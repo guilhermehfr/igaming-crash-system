@@ -16,14 +16,13 @@ import { RoundRepository } from "@infrastructure/typeorm/round.repository";
 import { RoundTypeormEntity } from "@infrastructure/typeorm/round.typeorm-entity";
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { GamesController } from "@presentation/controllers/games.controller";
 import { GamesGateway } from "@presentation/gateway/games.gateway";
-import { XUserIdGuard } from "@presentation/guards/x-user-id.guard";
 import { config } from "./config/configuration";
 import { DemoRabbitMQPublisherService } from "./demo-rabbitmq-publisher.service";
-import { DemoXUserIdGuard } from "./auth/demo-x-user-id.guard";
 import { WalletSyncService } from "./wallet-sync.service";
 import { WalletsModule } from "./wallets.module";
+import { DemoXUserIdGuard } from "./auth/demo-x-user-id.guard";
+import { DemoGamesController } from "./controllers/demo-games.controller";
 
 @Module({
   imports: [
@@ -52,7 +51,7 @@ import { WalletsModule } from "./wallets.module";
       },
     },
     { provide: RabbitMQPublisherService, useClass: DemoRabbitMQPublisherService },
-    { provide: XUserIdGuard, useClass: DemoXUserIdGuard },
+    DemoXUserIdGuard,
     WalletSyncService,
     DemoRabbitMQPublisherService,
     GamesGateway,
@@ -64,6 +63,6 @@ import { WalletsModule } from "./wallets.module";
     GetBetUseCase,
     VerifyRoundUseCase,
   ],
-  controllers: [GamesController],
+  controllers: [DemoGamesController],
 })
 export class GamesModule {}

@@ -8,9 +8,8 @@ import { CreateWalletUseCase } from "@application/use-cases/create-wallet";
 import { GetWalletUseCase } from "@application/use-cases/get-wallet";
 import { DebitWalletUseCase } from "@application/use-cases/debit-wallet";
 import { CreditWalletUseCase } from "@application/use-cases/credit-wallet";
-import { WalletsController } from "@presentation/controllers/wallets.controller";
-import { XUserIdGuard } from "@presentation/guards/x-user-id.guard";
 import { DemoXUserIdGuard } from "./auth/demo-x-user-id.guard";
+import { DemoWalletsController } from "./controllers/demo-wallets.controller";
 
 @Module({
   imports: [
@@ -19,13 +18,13 @@ import { DemoXUserIdGuard } from "./auth/demo-x-user-id.guard";
   providers: [
     { provide: "IWalletRepository", useClass: WalletRepository },
     { provide: "IConsumedEventRepository", useClass: ConsumedEventRepository },
-    { provide: XUserIdGuard, useClass: DemoXUserIdGuard },
+    DemoXUserIdGuard,
     CreateWalletUseCase,
     GetWalletUseCase,
     DebitWalletUseCase,
     CreditWalletUseCase,
   ],
-  controllers: [WalletsController],
+  controllers: [DemoWalletsController],
   exports: [CreateWalletUseCase, DebitWalletUseCase, CreditWalletUseCase, GetWalletUseCase],
 })
 export class WalletsModule {}
