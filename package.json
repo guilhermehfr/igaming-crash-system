@@ -10,7 +10,10 @@
     "docker:up": "docker compose up",
     "docker:up:prod": "docker compose -f docker-compose.yml -f docker-compose.prod.yml up",
     "docker:down": "docker compose down",
-    "docker:reset": "docker compose down -v --rmi all --remove-orphans"
+    "docker:reset": "docker compose down -v --rmi all --remove-orphans",
+    "demo:up": "docker compose -f docker-compose.demo.yml up -d",
+    "demo:down": "docker compose -f docker-compose.demo.yml down",
+    "demo:reset": "docker compose -f docker-compose.demo.yml down -v --rmi all --remove-orphans"
   },
   "devDependencies": {
     "bun-types": "latest"

@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "types": ["bun-types"],
+    "target": "ES2021",
+    "lib": ["ES2021"],
+    "sourceMap": true,
+    "outDir": "./dist",
+    "incremental": true,
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "strictBindCallApply": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "resolveJsonModule": true,
+    "baseUrl": "./",
+    "paths": {
+      "@domain/*": ["../../services/games/src/domain/*", "../../services/wallets/src/domain/*"],
+      "@application/*": ["../../services/games/src/application/*", "../../services/wallets/src/application/*"],
+      "@infrastructure/*": ["../../services/games/src/infrastructure/*", "../../services/wallets/src/infrastructure/*"],
+      "@presentation/*": ["../../services/games/src/presentation/*", "../../services/wallets/src/presentation/*"],
+      "@config/*": ["../../services/games/src/config/*", "../../services/wallets/src/config/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

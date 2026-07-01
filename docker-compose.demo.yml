@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:18.3-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: crash_demo
+    volumes:
+      - postgres_demo_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d crash_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  demo:
+    build:
+      context: .
+      dockerfile: services/demo/Dockerfile
+    ports:
+      - "4003:4001"
+    environment:
+      DATABASE_URL: postgresql://admin:admin@postgres:5432/crash_demo?sslmode=disable
+      JWT_SECRET: demo-local-secret
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4001/games/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+volumes:
+  postgres_demo_data:
