@@ -2,6 +2,8 @@
 
 # 🎲 iGaming Crash System
 
+[![Vercel Status](https://therealsujitk-vercel-badge.vercel.app/?app=webhook-handler-generator)](https://igaming-crash.vercel.app/)
+[![Render](https://img.shields.io/badge/render-live-brightgreen?style=flat&logo=render&logoColor=white)](https://crash-demo-rfb8.onrender.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A real-time multiplayer crash game system built with Domain-Driven Design and Hexagonal Architecture. Players place bets before each round and must cash out before the multiplier collapses.
@@ -11,7 +13,23 @@ A real-time multiplayer crash game system built with Domain-Driven Design and He
 
 🌐 _[Leia em Português](README-pt-br.md)_
 
+[Live App](https://igaming-crash.vercel.app) · [API](https://crash-demo-rfb8.onrender.com) · [Report Bug](https://github.com/guilhermehfr/igaming-crash-system/issues)
+
+---
+
 </div>
+
+## 🚀 Demo Access (Recommended)
+
+To explore the platform instantly without setup, acess:
+
+Live App: https://igaming-crash.vercel.app
+
+And use the credentials below to login:
+
+| Username  | Password    |
+| --------- | ----------- |
+| player    | player123   |
 
 ---
 

@@ -1,17 +1,35 @@
 <div align="center">
 
-# 🎲 iGaming Crash System
+# 🎲 IGaming Crash System
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Vercel Status](https://therealsujitk-vercel-badge.vercel.app/?app=webhook-handler-generator)](https://igaming-crash.vercel.app/)
+[![Render](https://img.shields.io/badge/render-live-brightgreen?style=flat&logo=render&logoColor=white)](https://crash-demo-rfb8.onrender.com)
+[![Licença: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Um sistema de jogo "crash" multiplayer em tempo real construído com Domain-Driven Design e Arquitetura Hexagonal. Jogadores apostam antes de cada rodada e precisam sacar antes que o multiplicador colapse.
+Um sistema multiplayer de jogo Crash em tempo real, desenvolvido com Domain-Driven Design (DDD) e Arquitetura Hexagonal. Os jogadores realizam suas apostas antes de cada rodada e precisam sacar seus ganhos antes que o multiplicador colapse.
 
 **Backend:** TypeScript · NestJS · Bun · PostgreSQL · RabbitMQ  
 **Frontend:** React · Vite · TypeScript
 
 🌐 _[Read in English](README.md)_
 
+[Live App](https://igaming-crash.vercel.app) · [API](https://crash-demo-rfb8.onrender.com) · [Reportar Bug](https://github.com/guilhermehfr/igaming-crash-system/issues)
+
+---
+
 </div>
+
+## 🚀 Acesso à Demo (Recomendado)
+
+Para explorar a plataforma instantaneamente, sem necessidade de configuração, acesse:
+
+Live App: https://igaming-crash.vercel.app
+
+E utilize as credenciais abaixo para fazer login:
+
+| Usuário | Senha     |
+| ------- | --------- |
+| player  | player123 |
 
 ---
 
