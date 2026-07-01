@@ -87,6 +87,7 @@ O sistema segue **Domain-Driven Design (DDD)** e **Arquitetura Hexagonal** com s
 | --- | --- | --- |
 | **Games** | 4001 | Rodadas do crash game com máquina de estados (BETTING → RUNNING → CRASHED) |
 | **Wallets** | 4002 | Saldos das contas de usuário com precisão monetária (BigInt) |
+| **Demo** | 4003 | Deploy single-service (games+wallets mesclados, JWT simples, sem dependências) |
 | **Kong** | 8000 | API Gateway (roteia `/games` → 4001, `/wallets` → 4002, `/socket.io` → 4001 WS) |
 | **Keycloak** | 8080 | Identity Provider (OAuth2/OIDC) |
 | **RabbitMQ** | 5672 | Message broker para comunicação assíncrona entre serviços |
@@ -174,7 +175,7 @@ WebSockets para sincronização das rodadas. O tráfego passa pelo Kong (`/socke
 
 ## 🖥 Frontend
 
-Aplicação React 19 construída com Vite 8 e Tailwind 4. Todo o tráfego de API passa pelo Kong na porta 8000. Em desenvolvimento, o proxy do Vite encaminha as chamadas same-origin (`/games/*`, `/wallets/*`, `/socket.io`) para o Kong.
+Aplicação React 19 construída com Vite 8 e Tailwind 4. O tráfego de API vai para seu backend via `VITE_API_URL` (padrão: Kong na porta 8000; defina como `http://localhost:4003` para modo demo). Em desenvolvimento, o proxy do Vite encaminha as chamadas same-origin (`/games/*`, `/wallets/*`, `/socket.io`) para o Kong.
 
 ### Gráfico do Crash
 
@@ -266,6 +267,7 @@ Swagger UI disponível em:
 │           ├── application/      # Use cases, DTOs
 │           ├── infrastructure/  # Entidades TypeORM, repositórios
 │           └── presentation/    # Controllers REST
+│   └── demo/              # Demo single-service (games+wallets mesclados, JWT simples)
 ├── frontend/
 │   └── src/
 │       ├── App.tsx              # Raiz com AuthProvider → LoginPage | GamePage
@@ -315,6 +317,14 @@ Esse comando sobe toda a stack automaticamente (databases, serviços, gateway, a
 ```bash
 cd frontend && bun dev
 ```
+
+### Modo demo (serviço único)
+Postgres + backend mesclado, sem dependências (Kong/Keycloak/RabbitMQ):
+```bash
+bun demo:up
+cd frontend && VITE_API_URL=http://localhost:4003 bun run build && bun preview
+```
+Login com `player` / `player123`. Carteira criada automaticamente com $1.000.
 
 ### Modo produção
 Sem portas diretas dos serviços — tráfego apenas através do Kong:

@@ -11,7 +11,20 @@ bun run dev
 
 ## Connecting to Backend
 
-### Development
+### Demo (single-service via Docker)
+
+```bash
+# From repo root — start Postgres + demo backend
+bun demo:up
+
+# Serve frontend pointing at the demo service
+cd frontend
+VITE_API_URL=http://localhost:4003 bun run build && bun preview
+```
+
+The demo runs on host port **4003** (no Kong, no Keycloak, no RabbitMQ). Postgres runs on host port **5433** to avoid conflicting with the full stack.
+
+### Development (full stack via Kong)
 
 All traffic (REST + WebSocket) goes through Kong via Vite proxy:
 
@@ -38,9 +51,7 @@ WebSocket connects through the same proxy (same-origin):
 
 ```ts
 import { io } from "socket.io-client";
-const socket = io({
-  transports: ["websocket"],
-});
+const socket = io(undefined, { transports: ["websocket"] }); // dev: same-origin via Vite proxy
 ```
 
 ### Production
@@ -56,7 +67,7 @@ Services are not publicly exposed — only accessible via Kong through the Docke
 ## Auth Flow
 
 ### Development
-The `apiFetch` helper sends `X-User-Id` from stored auth and `X-Demo-Session` from `sessionStorage`. Kong forwards both to the service:
+The `apiFetch` helper sends `X-User-Id` and `Authorization: Bearer <token>` from stored auth data. Kong forwards the identity to the service:
 
 ```ts
 fetch("/games/current", {
@@ -64,7 +75,7 @@ fetch("/games/current", {
 });
 ```
 
-On first login, `AuthContext.ensureWalletCreated()` uses a direct `fetch` (not `apiFetch`) with explicit `X-User-Id` and `X-Demo-Session` headers — no localStorage dependency.
+On first login, `AuthContext.ensureWalletCreated()` uses a direct `fetch` (not `apiFetch`) with explicit `X-User-Id` header — wallet is keyed by userId only.
 
 ### Production
 JWT from Keycloak is required. Kong validates the JWT, extracts the `sub` claim, and injects `X-User-Id` + `X-Gateway-Authenticated` headers. Client-provided identity headers are stripped by Kong — spoofing is not possible.
@@ -83,7 +94,7 @@ JWT from Keycloak is required. Kong validates the JWT, extracts the `sub` claim,
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VITE_API_URL` | `"http://localhost:8000"` | Kong API gateway (proxies /games, /wallets, /auth, /socket.io) |
+| `VITE_API_URL` | `"http://localhost:8000"` | Backend URL. Set to `http://localhost:4003` for demo mode, or your production URL |
 
 ## API Endpoints (via proxy)
 

@@ -87,6 +87,7 @@ The system follows **Domain-Driven Design (DDD)** and **Hexagonal Architecture**
 | --- | --- | --- |
 | **Games** | 4001 | Crash game rounds with state machine (BETTING → RUNNING → CRASHED) |
 | **Wallets** | 4002 | User account balances with monetary precision (BigInt) |
+| **Demo** | 4003 | Single-service deployable (merged games+wallets, simple JWT, no dependencies) |
 | **Kong** | 8000 | API Gateway (routes `/games` → 4001, `/wallets` → 4002, `/socket.io` → 4001 WS) |
 | **Keycloak** | 8080 | Identity Provider (OAuth2/OIDC) |
 | **RabbitMQ** | 5672 | Message broker for async inter-service communication |
@@ -174,7 +175,7 @@ WebSockets for round synchronization. Traffic routes through Kong (`/socket.io` 
 
 ## 🖥 Frontend
 
-React 19 application built with Vite 8 and Tailwind 4. All API traffic routes through Kong on port 8000. In development, Vite proxy handles same-origin forwarding (`/games/*`, `/wallets/*`, `/socket.io`) to Kong.
+React 19 application built with Vite 8 and Tailwind 4. API traffic routes to your backend via `VITE_API_URL` (defaults to Kong on port 8000; set to `http://localhost:4003` for demo mode). In development, Vite proxy handles same-origin forwarding (`/games/*`, `/wallets/*`, `/socket.io`) to Kong.
 
 ### Crash Graph
 
@@ -266,6 +267,7 @@ Swagger UI available at:
 │           ├── application/      # Use cases, DTOs
 │           ├── infrastructure/  # TypeORM entities, repositories
 │           └── presentation/    # REST controllers
+│   └── demo/              # Single-service demo (merged games+wallets, simple JWT)
 ├── frontend/
 │   └── src/
 │       ├── App.tsx              # Root with AuthProvider → LoginPage | GamePage
@@ -315,6 +317,14 @@ This command boots up the entire stack automatically (databases, services, gatew
 ```bash
 cd frontend && bun dev
 ```
+
+### Demo mode (single service)
+Postgres + merged backend, no dependencies (Kong/Keycloak/RabbitMQ):
+```bash
+bun demo:up
+cd frontend && VITE_API_URL=http://localhost:4003 bun run build && bun preview
+```
+Login with `player` / `player123`. Wallet auto-created with $1,000.
 
 ### Production mode
 No direct service ports — traffic only through Kong:

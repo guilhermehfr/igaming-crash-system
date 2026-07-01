@@ -359,6 +359,38 @@ interface IWalletRepository {
 - **Solution**: Created `docker-compose.prod.yml` that overrides Kong config to `kong.prod.yml` (JWT enforced) and clears direct ports from games/wallets. Run with `bun docker:up:prod`.
 - **Files**: `docker-compose.prod.yml`, `package.json`
 
+### Frontend Fixes (2026-06-26)
+
+**1. Demo Session Wallet Bug**
+- **Problem**: After closing an incognito tab and opening a new one, the balance wouldn't load. Wallets were keyed by `(userId, demoSessionId)` pair — each browser tab got its own wallet. On second login the `refreshBalance` call used a new session ID that didn't match the new wallet's session ID, causing a lookup miss.
+- **Solution**: Removed demo session dependency from wallet operations. `ensureWalletCreated` no longer sends `X-Demo-Session` header. `apiFetch` no longer injects `X-Demo-Session`. All wallet lookups use `userId` only via `findByUserId()`. Demo session remains for display names in socket events.
+- **Files**: `frontend/src/contexts/AuthContext.tsx`, `frontend/src/lib/api.ts`
+
+**2. Quick Button Behavior**
+- **Problem**: 1x set to 1% of balance (absolute), 2x set to 2% of balance (absolute). Clicking 2x again did nothing (same absolute value), confusing users.
+- **Solution**: 1x now sets a fixed default of $10 (`Math.min(10, balance)`). 2x doubles the current `betAmount` input value (capped at balance). MAX stays all-in.
+- **Files**: `frontend/src/components/game/RightPanel.tsx`
+
+**3. Mock Bet Cash-Out Interval**
+- **Problem**: The mock bet cash-out interval (800ms) was destroyed and recreated every 100ms because `currentMultiplier` was in the effect's dependency array. The interval callback never fired — all mock bets stayed pending, then all became lost on crash.
+- **Solution**: Added `currentMultiplierRef` holding the latest multiplier. Interval callback reads the ref, not state. Removed `currentMultiplier` from effect deps — interval lives for the full RUNNING phase.
+- **Files**: `frontend/src/contexts/SocketContext.tsx`
+
+**4. Mock Bet Cash-Out Logic**
+- **Problem**: Mock bets used a probability formula where all bets shared the same cash-out probability at the same multiplier. Minimum target was 1.1x (10+ seconds) — too high for short rounds.
+- **Solution**: Each mock bet gets a pre-determined `cashOutAt` target: 35% conservative (1.01–1.2x), 20% moderate (1.21–2.0x), 15% aggressive (2.01–5.0x), 30% let-it-ride (null). Cash-out triggers when `currentMultiplier >= cashOutAt`.
+- **Files**: `frontend/src/lib/mock-users.ts`
+
+**5. Mobile Responsive Layout**
+- **Problem**: LiveBets sidebar always visible, taking space on mobile. Layout was a single flex row that overflowed on small screens.
+- **Solution**: LiveBets `hidden md:flex`. GamePage `flex-col md:flex-row`. RightPanel `w-full md:w-[25rem]` with `border-t md:border-l`.
+- **Files**: `frontend/src/components/game/LiveBets.tsx`, `frontend/src/components/game/GamePage.tsx`, `frontend/src/components/game/GameCanvas.tsx`, `frontend/src/components/game/RightPanel.tsx`
+
+**6. Keycloak Health Check**
+- **Problem**: Kong's `depends_on` didn't wait for Keycloak. Health check used `wget` (not in the image).
+- **Solution**: Added `keycloak` to Kong's `depends_on` with `condition: service_healthy`. Changed health check to `exec 3<>/dev/tcp/localhost:9000` (bash TCP).
+- **Files**: `docker-compose.yml`
+
 ## Technology Stack
 
 - **Runtime**: Bun 1.x (Alpine Docker image)
@@ -460,7 +492,7 @@ cd services/games && bun test --coverage
 cd services/games && bun test --watch
 ```
 
-### Docker
+### Docker (full stack)
 
 ```bash
 # Start full stack (Postgres, RabbitMQ, Keycloak, Kong, services)
@@ -479,6 +511,19 @@ bun docker:prune
 docker compose logs -f games       # Games service logs
 docker compose logs -f wallets     # Wallets service logs
 docker compose logs -f postgres    # Database logs
+```
+
+### Docker (demo single-service)
+
+```bash
+# Start Postgres (5433) + demo backend (4003) — no Kong/Keycloak/RabbitMQ
+bun demo:up
+
+# Stop
+bun demo:down
+
+# Clean up
+bun demo:reset
 ```
 
 ### Database & Migrations
@@ -829,15 +874,15 @@ App
 - On network error in dev mode: falls back to static `DEV_USER_ID` UUID (`00000000-0000-0000-0000-000000000001`) — no JWT, no server dependency
 - On 401: throws to form for error display
 - Hydrates from `localStorage` on mount; `isLoading=true` until hydration completes (prevents login flash on refresh)
-- Wallet creation via `ensureWalletCreated()`: uses direct `fetch` (not `apiFetch`) with explicit `X-User-Id` + `X-Demo-Session` headers from function params. Called before `setUser()` to avoid race between socket connect and wallet existence.
+- Wallet creation via `ensureWalletCreated()`: uses direct `fetch` (not `apiFetch`) with explicit `X-User-Id` header only — wallet is keyed by userId alone (no demo session). Called before `setUser()` to avoid race between socket connect and wallet existence.
 - Dev fallback also creates wallet before `setUser()`
 
 **keycloakLogin** (`frontend/src/lib/auth.ts`): POSTs to `${config.apiUrl}/auth/realms/crash-game/protocol/openid-connect/token` (via Kong) with `grant_type=password`, decodes JWT body (base64), returns `{ userId (sub), email, token }`.
 
 **apiFetch** (`frontend/src/lib/api.ts`): Wraps `fetch()` with env-aware headers:
-- **Dev** (`config.isDev`): Always sends `X-User-Id` from stored auth and `X-Demo-Session` from `sessionStorage` (dev Kong passes through without validating JWT)
-- **Prod** (`config.isProd`): Sends `Authorization: Bearer <token>` only (prod Kong validates JWT, strips client-provided `X-User-Id`, injects trusted `sub`)
-- Never sends both headers in any environment
+- Reads `X-User-Id` and `Authorization: Bearer <token>` from localStorage (always sends both when auth data exists)
+- Dev Kong (`kong.dev.yml`): passes through `X-User-Id` without JWT validation
+- Prod Kong (`kong.prod.yml`): validates JWT, strips client-provided identity headers, injects trusted `X-User-Id` from `sub` claim
 
 ### Canvas Crash Graph
 
@@ -869,9 +914,9 @@ App
 
 ### Socket Context
 
-**SocketContext** (`frontend/src/contexts/SocketContext.tsx`, 122 lines): Manages socket.io connection and exposes round state to all game components.
+**SocketContext** (`frontend/src/contexts/SocketContext.tsx`, 332 lines): Manages socket.io connection and exposes round state to all game components.
 
-**Connection:** `io(undefined, { transports: ['websocket', 'polling'] })`. Empty URL → same-origin via Vite proxy → Kong port 8000.
+**Connection:** `io(config.isDev ? undefined : config.apiUrl, { transports: ['websocket', 'polling'] })`. In dev, empty URL → same-origin via Vite proxy → Kong. In prod, direct to `config.apiUrl` (Render URL or Kong).
 
 **Exposed Values:**
 - `bets: LiveBet[]` — live bet feed (id, user, amount, outcome)
@@ -879,10 +924,14 @@ App
 - `roundState: 'betting' | 'running' | 'crashed'` — current round phase
 - `roundNumber: number` — auto-incrementing counter
 - `currentMultiplier: number` — latest server multiplier
-- `connected: boolean` — socket connection status
+- `seedHash: string` — current provably fair server seed hash
+- `seedHistory: RevealedSeed[]` — revealed seed entries (persisted to sessionStorage)
+- `revealSeed: () => Promise<void>` — reveal and rotate server seed
 - `balance: number | null` — user's wallet balance (shared source of truth for TopBar + RightPanel)
 - `refreshBalance: (userId: string) => Promise<void>` — refetch balance from wallets API
+- `connected: boolean` — socket connection status
 - `crashHistory: CrashRound[]` — list of rounds watched during this session (from `round:crashed` WS events)
+- `hasBet: boolean` — whether the current user has a pending bet
 
 **Socket Events Listened:**
 - `round:state-changed` — updates `roundState`, on `betting` increments round counter + resets multiplier, refreshes balance
@@ -891,12 +940,14 @@ App
 - `round:bet-cashed-out` — updates bet outcome to `cashed` with multiplier
 - `round:crashed` — sets `roundState` to `crashed`, freezes multiplier at crash point, appends to crashHistory with user's bet outcome type
 
+**Mock Bets:** 3-6 simulated players per round generated at `betting` phase. Each mock bet has a pre-determined `cashOutAt` multiplier set at creation: 35% conservative (1.01–1.2x), 20% moderate (1.21–2.0x), 15% aggressive (2.01–5.0x), 30% let-it-ride (null → loses on crash). During `running` phase, an 800ms interval checks `currentMultiplier >= cashOutAt` using a ref (`currentMultiplierRef`) to avoid stale closures and interval annihilation (the interval was being destroyed every 100ms by `currentMultiplier` in the effect deps). On crash, remaining pending mock bets become `lost`.
+
 ### Dual-Mode GamePage
 
 **GamePage** (`frontend/src/components/game/GamePage.tsx`, 49 lines): Routes between server-connected and disconnected modes.
 - When `connected`: reads state from `SocketContext`, passes `currentMultiplier` to canvas, disables DEV button
 - When disconnected: uses local React state (`localState`, `localRound`), passes `undefined` currentMultiplier to canvas (triggers fallback timer), shows DEV cycle button in RightPanel
-- Layout: `TopBar` (full width) → flex row of `LiveBets | GameCanvas | RightPanel`
+- Layout: `TopBar` (full width) → `flex flex-col md:flex-row` of `LiveBets | GameCanvas | RightPanel`. On mobile, LiveBets hidden (`hidden md:flex`), GameCanvas on top, RightPanel below at full width with `border-t md:border-l`.
 
 ### Tailwind 4 Theme
 
@@ -1047,14 +1098,10 @@ If a Round is stuck or has unexpected behavior:
 - ✅ Socket.io WebSocket integration with dual-mode fallback (connected/disconnected)
 - ✅ Keycloak auth layer with dev fallback (static UUID when Keycloak unreachable)
 - ✅ Place-bet/cash-out API integration (RightPanel, TopBar, balance context)
-- ✅ Wallet creation on first login (ensureWalletCreated, direct fetch)
-- ✅ Responsive layout (LiveBets sidebar + Canvas center + RightPanel)
+- ✅ Wallet creation on first login (ensureWalletCreated, direct fetch, userId-only)
+- ✅ Responsive layout (LiveBets sidebar mobile-hidden + Canvas center + RightPanel stacked on mobile)
 - ✅ Tailwind 4 custom theme (5 colors, 2 fonts)
 - ✅ Primitives (Button, Input via tailwind-variants)
-
-**Remaining for production-readiness**:
-- ❌ Provably fair client-side seed verification
-- ❌ Login flow E2E test (with Keycloak running)
 
 ---
 
