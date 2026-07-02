@@ -1,4 +1,5 @@
 import { LoginPage } from '@/components/auth/LoginPage';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { GamePage } from '@/components/game/GamePage';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
@@ -16,9 +17,11 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
