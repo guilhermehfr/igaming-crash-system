@@ -5,6 +5,10 @@ export const MOCK_USERS = [
   { userId: 'mock-004', displayName: 'CashKing' },
   { userId: 'mock-005', displayName: 'MoonWalker' },
   { userId: 'mock-006', displayName: 'RiskyBet' },
+  { userId: 'mock-007', displayName: 'AllInAce' },
+  { userId: 'mock-008', displayName: 'BetMaster' },
+  { userId: 'mock-009', displayName: 'LuckyCharm' },
+  { userId: 'mock-010', displayName: 'CryptoJake' },
 ];
 
 export type MockBet = {
@@ -23,18 +27,15 @@ function randBetween(min: number, max: number): number {
 let mockIdCounter = 0;
 
 export function generateMockBets(): MockBet[] {
-  const count = 3 + Math.floor(Math.random() * 4);
-  const shuffled = [...MOCK_USERS].sort(() => Math.random() - 0.5);
-  const selected = shuffled.slice(0, count);
   mockIdCounter = 0;
 
-  return selected.map((user) => {
+  return MOCK_USERS.map((user) => {
     mockIdCounter++;
     const r = Math.random();
     let cashOutAt: number | null;
     if (r < 0.35) cashOutAt = randBetween(1.01, 1.2);
     else if (r < 0.55) cashOutAt = randBetween(1.21, 2.0);
-    else if (r < 0.70) cashOutAt = randBetween(2.01, 5.0);
+    else if (r < 0.7) cashOutAt = randBetween(2.01, 5.0);
     else cashOutAt = null;
     return {
       id: `mock-${Date.now()}-${mockIdCounter}`,
