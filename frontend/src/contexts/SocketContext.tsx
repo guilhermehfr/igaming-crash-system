@@ -11,12 +11,14 @@ import { io } from 'socket.io-client';
 import { config } from '@/config';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { toDisplayName } from '@/lib/display';
 import {
   cashOutRandomMocks,
   generateMockBets,
   loseRemainingMocks,
   type MockBet,
 } from '@/lib/mock-users';
+import { STORAGE } from '@/lib/storage-keys';
 
 export type RoundState = 'betting' | 'running' | 'crashed' | null;
 
@@ -54,16 +56,12 @@ type SocketContextValue = {
   balance: number | null;
   refreshBalance: (userId: string) => Promise<void>;
   connected: boolean;
+  syncError: string | null;
   crashHistory: CrashRound[];
   hasBet: boolean;
 };
 
 const SocketContext = createContext<SocketContextValue | null>(null);
-
-function toDisplayName(userId: string, demoSessionId: string | null): string {
-  if (demoSessionId === null) return `Player-${userId.slice(0, 4)}`;
-  return `Guest-${demoSessionId.slice(0, 4)}`;
-}
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const roundCountRef = useRef(0);
@@ -73,6 +71,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [currentMultiplier, setCurrentMultiplier] = useState(0);
   const currentMultiplierRef = useRef(0);
   currentMultiplierRef.current = currentMultiplier;
+  const currentRoundIdRef = useRef<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [roundNumber, setRoundNumber] = useState(0);
   const [bets, setBets] = useState<LiveBet[]>([]);
   const [seedHash, setSeedHash] = useState('');
@@ -87,7 +87,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
   const [seedHistory, setSeedHistory] = useState<RevealedSeed[]>(() => {
     try {
-      const raw = sessionStorage.getItem('igaming-seed-history');
+      const raw = sessionStorage.getItem(STORAGE.SEED_HISTORY);
       return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
@@ -109,7 +109,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       setSeedHash(data.serverSeedHash);
       setSeedHistory((prev) => {
         const updated = [entry, ...prev];
-        sessionStorage.setItem('igaming-seed-history', JSON.stringify(updated));
+        sessionStorage.setItem(STORAGE.SEED_HISTORY, JSON.stringify(updated));
         return updated;
       });
     } catch {
@@ -138,11 +138,17 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
   const mockBetsRef = useRef<MockBet[]>([]);
   const mockTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const staggerTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mockRevealedRef = useRef(0);
 
   const clearMockTimer = useCallback(() => {
     if (mockTimerRef.current !== null) {
       clearInterval(mockTimerRef.current);
       mockTimerRef.current = null;
+    }
+    if (staggerTimerRef.current !== null) {
+      clearInterval(staggerTimerRef.current);
+      staggerTimerRef.current = null;
     }
   }, []);
 
@@ -153,11 +159,39 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       clearMockTimer();
       const mocks = generateMockBets();
       mockBetsRef.current = mocks;
-      setBets((prev) => [
-        ...mocks.map(mockToLiveBet),
-        ...prev.filter((b) => !b.id.startsWith('mock-')),
-      ]);
+      mockRevealedRef.current = 0;
+      setBets([]);
+
+      staggerTimerRef.current = setInterval(() => {
+        const total = mockBetsRef.current.length;
+        const shown = mockRevealedRef.current;
+        if (shown >= total) {
+          if (staggerTimerRef.current !== null) {
+            clearInterval(staggerTimerRef.current);
+            staggerTimerRef.current = null;
+          }
+          return;
+        }
+        const batchSize = 1 + Math.floor(Math.random() * 2);
+        const newShown = Math.min(shown + batchSize, total);
+        mockRevealedRef.current = newShown;
+        setBets((prev) => [
+          ...mockBetsRef.current.slice(0, newShown).map(mockToLiveBet),
+          ...prev.filter((b) => !b.id.startsWith('mock-')),
+        ]);
+      }, 600);
     } else if (roundState === 'running') {
+      if (staggerTimerRef.current !== null) {
+        clearInterval(staggerTimerRef.current);
+        staggerTimerRef.current = null;
+      }
+      if (mockRevealedRef.current < mockBetsRef.current.length) {
+        mockRevealedRef.current = mockBetsRef.current.length;
+        setBets((prev) => [
+          ...mockBetsRef.current.map(mockToLiveBet),
+          ...prev.filter((b) => !b.id.startsWith('mock-')),
+        ]);
+      }
       mockTimerRef.current = setInterval(() => {
         mockBetsRef.current = cashOutRandomMocks(mockBetsRef.current, currentMultiplierRef.current);
         setBets((prev) => [
@@ -178,7 +212,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   }, [roundState, clearMockTimer]);
 
   useEffect(() => {
-    const socket = io(config.isDev ? undefined : config.apiUrl, { transports: ['websocket', 'polling'] });
+    const socket = io(config.isDev ? undefined : config.apiUrl, {
+      transports: ['websocket', 'polling'],
+    });
 
     socket.on('connect', () => {
       setConnected(true);
@@ -188,12 +224,16 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         .then((data) => {
           if (data?.serverSeedHash) setSeedHash(data.serverSeedHash);
         })
-        .catch(() => {});
+        .catch((err) => {
+          if (config.isDev) console.warn('Provably-fair sync failed:', err);
+          setSyncError('Failed to sync game data');
+        });
 
       apiFetch(`${config.apiUrl}/games/current`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (!data) return;
+          currentRoundIdRef.current = data.id ?? null;
           const state = data.state.toLowerCase() as RoundState;
           setRoundState(state);
           setCurrentMultiplier(data.currentMultiplier);
@@ -202,7 +242,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
             setRoundNumber(roundCountRef.current);
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          if (config.isDev) console.warn('Current round fetch failed:', err);
+          setSyncError('Failed to connect to game server');
+        });
 
       if (userIdRef.current) refreshBalance(userIdRef.current);
     });
@@ -212,20 +255,23 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     socket.on(
       'round:state-changed',
       (data: { roundId: string; state: string; crashPoint: number | null }) => {
+        currentRoundIdRef.current = data.roundId;
         const state = data.state.toLowerCase() as RoundState;
         setRoundState(state);
         if (state === 'betting') {
           setHasBet(false);
+          setSyncError(null);
           roundCountRef.current += 1;
           setRoundNumber(roundCountRef.current);
           setCurrentMultiplier(0);
-          setBets((prev) => prev.filter((b) => !b.id.startsWith('mock-')));
+          setBets([]);
           if (userIdRef.current) refreshBalance(userIdRef.current);
         }
       },
     );
 
     socket.on('round:multiplier-updated', (data: { roundId: string; multiplier: number }) => {
+      if (data.roundId !== currentRoundIdRef.current) return;
       setCurrentMultiplier(data.multiplier);
     });
 
@@ -235,6 +281,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         roundId: string;
         bet: { id: string; userId: string; demoSessionId: string | null; amountInMainUnit: number };
       }) => {
+        if (data.roundId !== currentRoundIdRef.current) return;
         if (data.bet.userId === userIdRef.current) setHasBet(true);
         const newBet: LiveBet = {
           id: data.bet.id,
@@ -258,6 +305,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
           multiplier: number | null;
         };
       }) => {
+        if (data.roundId !== currentRoundIdRef.current) return;
         setBets((prev) =>
           prev.map((b) =>
             b.id === data.bet.id
@@ -269,6 +317,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     );
 
     socket.on('round:crashed', (data: { roundId: string; crashPoint: number }) => {
+      if (data.roundId !== currentRoundIdRef.current) return;
       setRoundState('crashed');
       setCurrentMultiplier(data.crashPoint);
 
@@ -306,6 +355,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         balance,
         refreshBalance,
         connected,
+        syncError,
         crashHistory,
         hasBet,
       }}

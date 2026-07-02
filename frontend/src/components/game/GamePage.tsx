@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { GameCanvas } from '@/components/game/GameCanvas';
 import { LiveBets } from '@/components/game/LiveBets';
-import { RightPanel, setCurrentMultiplierRef } from '@/components/game/RightPanel';
+import { RightPanel } from '@/components/game/RightPanel';
 import { TopBar } from '@/components/game/TopBar';
 import type { RoundState } from '@/contexts/SocketContext';
 import { SocketProvider, useSocket } from '@/contexts/SocketContext';
@@ -19,10 +19,6 @@ function GamePageContent() {
 
   const [localState, setLocalState] = useState<RoundState>('betting');
   const [localRound, setLocalRound] = useState(8291);
-
-  useEffect(() => {
-    setCurrentMultiplierRef(currentMultiplier);
-  }, [currentMultiplier]);
 
   const effectiveState = connected ? roundState : localState;
   const effectiveRound = connected ? roundNumber : localRound;

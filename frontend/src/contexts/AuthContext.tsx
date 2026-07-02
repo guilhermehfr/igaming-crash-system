@@ -1,8 +1,8 @@
 import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
 import { config } from '@/config';
+import { apiFetch } from '@/lib/api';
 import { keycloakLogin } from '@/lib/auth';
-
-const AUTH_KEY = 'igaming-auth';
+import { STORAGE } from '@/lib/storage-keys';
 
 export type AuthUser = {
   id: string;
@@ -20,15 +20,15 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function persistAuth(data: AuthUser) {
-  localStorage.setItem(AUTH_KEY, JSON.stringify(data));
+  localStorage.setItem(STORAGE.AUTH, JSON.stringify(data));
 }
 
 function clearAuth() {
-  localStorage.removeItem(AUTH_KEY);
+  localStorage.removeItem(STORAGE.AUTH);
 }
 
 function hydrateAuth(): AuthUser | null {
-  const raw = localStorage.getItem(AUTH_KEY);
+  const raw = localStorage.getItem(STORAGE.AUTH);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as AuthUser;
@@ -38,14 +38,11 @@ function hydrateAuth(): AuthUser | null {
   }
 }
 
-async function ensureWalletCreated(userId: string) {
+async function ensureWalletCreated() {
   try {
-    const res = await fetch(`${config.apiUrl}/wallets`, {
+    const res = await apiFetch(`${config.apiUrl}/wallets`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': userId,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ initialBalanceInMainUnit: 1000 }),
     });
     if (res.status === 409) return;
@@ -77,14 +74,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
       persistAuth(authUser);
 
-      await ensureWalletCreated(result.userId);
+      await ensureWalletCreated();
       setUser(authUser);
     } catch (err) {
       if (config.isDev && err instanceof TypeError) {
-        const devUser: AuthUser = { id: crypto.randomUUID(), username };
+        const DEV_USER_ID_KEY = 'dev-user-id';
+        let devId = localStorage.getItem(DEV_USER_ID_KEY);
+        if (!devId) {
+          devId = crypto.randomUUID();
+          localStorage.setItem(DEV_USER_ID_KEY, devId);
+        }
+        const devUser: AuthUser = { id: devId, username };
         persistAuth(devUser);
 
-        await ensureWalletCreated(devUser.id);
+        await ensureWalletCreated();
         setUser(devUser);
         return;
       }

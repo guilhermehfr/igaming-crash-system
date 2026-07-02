@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { CrashHistoryPills } from '@/components/game/CrashHistoryPills';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
+import { formatCurrency } from '@/lib/format';
 
 export function TopBar() {
   const { user } = useAuth();
@@ -40,8 +41,8 @@ export function TopBar() {
 
         <div className="flex items-center gap-4 justify-self-end">
           <span className="text-xs text-white">{user?.username ?? 'OPERATOR'}</span>
-          <span className="text-cyber-green font-semibold text-sm lg:text-base">
-            {balance !== null ? `$${balance.toFixed(2)}` : '---'}
+          <span className="text-sm font-semibold text-cyber-green lg:text-base" aria-live="polite">
+            {balance !== null ? formatCurrency(balance) : '---'}
           </span>
         </div>
       </div>

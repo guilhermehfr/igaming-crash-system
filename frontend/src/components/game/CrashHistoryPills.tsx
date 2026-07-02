@@ -1,5 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { CrashRound } from '@/contexts/SocketContext';
+import { formatMultiplier } from '@/lib/format';
+import { crashTypeToColor } from '@/lib/round-state';
 
 type CrashHistoryPillsProps = {
   history: CrashRound[];
@@ -59,15 +61,9 @@ export function CrashHistoryPills({ history }: CrashHistoryPillsProps) {
         {history.map((i) => (
           <li
             key={i.id}
-            className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
-              i.type === 'cashed'
-                ? 'bg-neon-green/10 border border-neon-green/30 text-neon-green'
-                : i.type === 'busted'
-                  ? 'bg-loss-red/10 border border-loss-red/40 text-loss-red'
-                  : 'bg-slate-500/10 border border-slate-500/30 text-slate-500'
-            }`}
+            className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${crashTypeToColor(i.type)}`}
           >
-            {i.multiplier.toFixed(2)}x
+            {formatMultiplier(i.multiplier)}
           </li>
         ))}
       </ul>

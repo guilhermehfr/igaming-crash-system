@@ -1,11 +1,11 @@
-const AUTH_KEY = 'igaming-auth';
+import { STORAGE } from './storage-keys';
 
 export async function apiFetch(url: string, opts?: RequestInit): Promise<Response> {
   const headers: Record<string, string> = {
     ...(opts?.headers as Record<string, string>),
   };
 
-  const raw = localStorage.getItem(AUTH_KEY);
+  const raw = localStorage.getItem(STORAGE.AUTH);
   if (raw) {
     try {
       const { id, token } = JSON.parse(raw);
