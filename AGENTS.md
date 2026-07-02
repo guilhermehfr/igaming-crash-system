@@ -55,10 +55,19 @@ frontend/
 │   ├── main.tsx              Entry point
 │   ├── config.ts             Env vars config (apiUrl, isDev)
 │   ├── index.css             Tailwind 4 + custom theme (colors, fonts)
-│   ├── lib/
-│   │   ├── auth.ts           keycloakLogin() — OIDC password grant
-│   │   └── api.ts            apiFetch() — env-aware header injection
-│   ├── contexts/
+   │   ├── lib/
+   │   │   ├── auth.ts             keycloakLogin() — OIDC password grant
+   │   │   ├── api.ts              apiFetch() — env-aware header injection
+   │   │   ├── format.ts           formatCurrency, formatMultiplier
+   │   │   ├── storage-keys.ts     STORAGE.AUTH, STORAGE.SEED_HISTORY
+   │   │   ├── round-state.ts      State→label/color/glow mappings
+   │   │   ├── bet-utils.ts        Validation, presets, winnings calc
+   │   │   ├── action-button.ts    getActionType/getActionLabel
+   │   │   ├── display.ts          toDisplayName
+   │   │   └── styles.ts           gridBackgroundStyle
+   │   ├── hooks/
+   │   │   └── useBet.ts           Bet state + API + effects, reads multiplier from context
+   │   ├── contexts/
 │   │   ├── AuthContext.tsx    Keycloak login, dev fallback, localStorage hydration
 │   │   └── SocketContext.tsx  Socket.io connection, round state, multiplier, bets
 │   └── components/
@@ -68,12 +77,17 @@ frontend/
 │       ├── brand/
 │       │   └── BrandPanel.tsx Rocket logo + CRASH_SYSTEM heading
 │       ├── game/
-│       │   ├── GameCanvas.tsx  HTML5 Canvas crash graph, exponential curve, rocket, explosion, round-state multiplier colors
-│       │   ├── GamePage.tsx    Layout: LiveBets + GameCanvas + RightPanel, dual-mode routing
-│       │   ├── RightPanel.tsx  Position status, CRASHED/CASHED OUT/RUNNING button states, place-bet/cash-out API, percentage presets, bet validation, error display
-│       │   ├── TopBar.tsx      Brand + CrashHistoryPills + balance display
+│       │   ├── GameCanvas.tsx      HTML5 Canvas crash graph, exponential curve, rocket, explosion, round-state multiplier colors
+│       │   ├── GamePage.tsx        Layout: LiveBets + GameCanvas + RightPanel, dual-mode routing
+│       │   ├── RightPanel.tsx      115 lines — delegates to useBet hook + 5 sub-components
+│       │   ├── BalanceDisplay.tsx  Balance row
+│       │   ├── PositionStatus.tsx  Position dot + bet/payout grid
+│       │   ├── ActionButton.tsx    4-variant button (place-bet/cash-out)
+│       │   ├── BetMessages.tsx     Error / insufficient balance display
+│       │   ├── BetInput.tsx        $ input + 1x/2x/MAX quick buttons
+│       │   ├── TopBar.tsx          Brand + CrashHistoryPills + balance display
 │       │   ├── CrashHistoryPills.tsx  Draggable scrollable pills, per-user bet coloring (cashed/busted/none)
-│       │   └── LiveBets.tsx    Live bet feed from SocketContext
+│       │   └── LiveBets.tsx        Live bet feed from SocketContext
 │       └── primitives/
 │           ├── Button.tsx      tailwind-variants button (primary, ghost, sizes)
 │           └── Input.tsx       Styled input with focus ring
@@ -865,6 +879,11 @@ App
                     ├── LiveBets
                     ├── GameCanvas
                     └── RightPanel
+                        ├── BalanceDisplay
+                        ├── PositionStatus
+                        ├── ActionButton
+                        ├── BetMessages
+                        └── BetInput
 ```
 
 ### Auth Layer
@@ -940,7 +959,7 @@ App
 - `round:bet-cashed-out` — updates bet outcome to `cashed` with multiplier
 - `round:crashed` — sets `roundState` to `crashed`, freezes multiplier at crash point, appends to crashHistory with user's bet outcome type
 
-**Mock Bets:** 3-6 simulated players per round generated at `betting` phase. Each mock bet has a pre-determined `cashOutAt` multiplier set at creation: 35% conservative (1.01–1.2x), 20% moderate (1.21–2.0x), 15% aggressive (2.01–5.0x), 30% let-it-ride (null → loses on crash). During `running` phase, an 800ms interval checks `currentMultiplier >= cashOutAt` using a ref (`currentMultiplierRef`) to avoid stale closures and interval annihilation (the interval was being destroyed every 100ms by `currentMultiplier` in the effect deps). On crash, remaining pending mock bets become `lost`.
+**Mock Bets:** 10 simulated players per round generated at `betting` phase. Each mock bet has a pre-determined `cashOutAt` multiplier set at creation: 35% conservative (1.01–1.2x), 20% moderate (1.21–2.0x), 15% aggressive (2.01–5.0x), 30% let-it-ride (null → loses on crash). During `betting` phase, mock bets are revealed in staggered batches (1-2 every 600ms). During `running` phase, an 800ms interval checks `currentMultiplier >= cashOutAt`. On crash, remaining pending mock bets become `lost`.
 
 ### Dual-Mode GamePage
 
@@ -1102,10 +1121,11 @@ If a Round is stuck or has unexpected behavior:
 - ✅ Responsive layout (LiveBets sidebar mobile-hidden + Canvas center + RightPanel stacked on mobile)
 - ✅ Tailwind 4 custom theme (5 colors, 2 fonts)
 - ✅ Primitives (Button, Input via tailwind-variants)
+- ✅ Refactored RightPanel (115 lines, 5 extracted sub-components, useBet hook, 7 shared lib modules)
 
 ---
 
-**Last Updated**: 2026-06-30  
+**Last Updated**: 2026-07-01  
 **Domain Layer Status**: ✅ Complete (1,247 lines, 7 files)  
 **Application Layer Status**: ✅ Wallets Complete (376 lines, 9 files) | ✅ Games Complete (824 lines, 13 files)  
 **Infrastructure Layer Status**: ✅ Complete (841 lines, 9 files)  
