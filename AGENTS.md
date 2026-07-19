@@ -908,8 +908,9 @@ App
 **GameCanvas** (`frontend/src/components/game/GameCanvas.tsx`, 367 lines): HTML5 Canvas with `requestAnimationFrame` loop.
 
 **Rendering Pipeline:**
-- `computePoints(m, w, h)`: Generates 150 points along an exponential log-scale curve. Multiplier `m` is mapped to x-span using `progress = (m - 1) / (crashPoint - 1)`. Y-coordinates computed as `h - ln(curveM) * scaleFactor` where `scaleFactor = (h * 0.85) / ln(15)`. The curve is biased toward early growth via `t ** 2.2` (delays steep rise).
+- `computePoints(multiplier, crashPoint, w, h)`: Generates up to 150 points with hockey-stick exponential curve. `x` is linear in progress (`p * w * 0.85`). Multiplier grows with a `p ** 2.2` bias (flat→steep). `y = h - normalized(curveM) * h * 0.85` where `normalized(curveM) = (curveM - 1) / (crashPoint - 1)`.
 - `drawLine(ctx, points, color)`: Draws the multiplier curve with `shadowBlur: 10` and `shadowColor` matching stroke color for the neon glow effect.
+- **Smooth animation**: `useCanvasRenderer` receives `runningStartTime` prop. In the rAF loop, when `roundState === 'running'` and `runningStartTime` is set, the multiplier is computed from elapsed time (`1.005 ** (elapsed / 100)`) rather than reading `currentMultiplierRef.current`. This decouples the canvas from React state updates (100ms `setInterval`) and produces smooth 60fps animation.
 - `drawRocket(ctx, tip, angle, color)`: 12-vertex vector shape drawn at the curve tip. Rotated via `ctx.rotate(angle + Math.PI/2)` where `angle = Math.atan2(dy, dx)` of the last two path points (tangent). Glow via `shadowBlur: 8`.
 - `drawExplosion(ctx, particles, crashTime, now)`: Expanding white circle (800ms, `Math.min(elapsed/800, 1) * 40` px radius) + 8 smoke particles (600ms, radial with random velocity). Uses `globalCompositeOperation = 'screen'` for additive blending.
 
@@ -1135,3 +1136,95 @@ If a Round is stuck or has unexpected behavior:
 **Testing Status**: ✅ Complete (140 tests: 106 unit + 34 E2E)  
 **Frontend**: ✅ Complete (game canvas, socket context, auth layer, UI components)  
 **Repository**: https://github.com/guilhermehfr/igaming-crash-system
+
+---
+
+## TODO — End-to-End Observability (Correlation IDs)
+
+### Goal
+Trace a single user action (e.g., place bet) through HTTP → service → RabbitMQ → consumer, linking all log lines and responses.
+
+### Architecture
+
+```
+X-Correlation-Id generated at Kong (edge) or NestJS interceptor (fallback)
+         │
+         ▼
+  AsyncLocalStorage (Node.js built-in — no external deps)
+         │
+         ├── HTTP response headers (via ResponseHeaderInterceptor)
+         ├── NestJS logs (via StructuredLogger)
+         ├── RabbitMQ events (correlationId field in IBetPlacedEvent etc.)
+         ├── WebSocket session (per-connection ID)
+         └── Error responses (via GlobalExceptionFilter)
+```
+
+### Design Decisions
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Generation source | Kong post-function (preferred) + NestJS interceptor (fallback) | Kong is true edge; interceptor handles demo/no-Kong paths |
+| Context propagation | `AsyncLocalStorage` (no external deps) | Spans async boundaries without changing use case signatures |
+| RabbitMQ event field | `correlationId: string \| null` (optional, nullable) | Backward compat with events already in-flight |
+| Logging format | Structured JSON with `correlationId`, `userId`, `service`, `timestamp` | Machine-parseable, grep-able |
+| WebSocket | Session-level ID generated on `handleConnection()` | No HTTP request context for WS events |
+| Client-supplied ID | Forwarded if present, generated if absent | Allows end-to-end trace from client tooling |
+
+### Phases
+
+#### Phase 1 — Kong Edge Generation
+- **Files**: `docker/kong/kong.dev.yml`, `docker/kong/kong.prod.yml`
+- Add `X-Correlation-Id` to CORS allowed headers
+- Add post-function (access phase): generate UUID if missing, inject into upstream
+- **Risk**: Low | **Effort**: Small
+- Kan: Use built-in `correlation-id` plugin (simpler) or custom post-function (supports client forwarding)
+
+#### Phase 2 — NestJS Infrastructure (shared across games, wallets, demo)
+- **New files per service**:
+  - `CorrelationIdService` — wraps `AsyncLocalStorage<string>`, exposes `run()`, getter `correlationId`
+  - `CorrelationIdInterceptor` — reads/generates ID, calls `service.run(id, () => next.handle())`
+  - `ResponseHeaderInterceptor` — sets `X-Correlation-Id` header on outgoing responses
+  - `StructuredLogger` (optional) — extends Logger, prepends correlationId to all lines
+  - `GlobalExceptionFilter` (games only — wallets already has one) — includes correlationId in error body
+- **Modified**: `main.ts` (register global interceptors), `app.module.ts` (register providers)
+- **Risk**: Low | **Effort**: Medium
+- **Key detail**: `AsyncLocalStorage` must wrap the entire handler via `run()` in the interceptor to survive NestJS async pipeline
+
+#### Phase 3 — RabbitMQ Propagation
+- **Files**: `packages/events/*.ts` (3 interfaces), `rabbitmq-publisher.service.ts`, `rabbitmq-consumer.service.ts`
+- Add `correlationId: string \| null` to `IBetPlacedEvent`, `IBetCashedOutEvent`, `IBetLostEvent`
+- Publisher: read from `CorrelationIdService.correlationId`, include in event
+- Consumer: extract and log; store in own AsyncLocalStorage for downstream use
+- **Demo**: No change (in-process calls inherit context naturally)
+- **Risk**: Low | **Effort**: Small
+
+#### Phase 4 — WebSocket Session Correlation
+- **File**: `services/games/src/presentation/gateway/games.gateway.ts`
+- `handleConnection()`: generate session-level correlation ID, store in `client.data`
+- Include in log messages for multiplier updates, state changes
+- **Risk**: Low | **Effort**: Small
+
+#### Phase 5 — Full Structured Logging (Optional)
+- Replace all `new Logger()` instances (15+ files) with injected `StructuredLogger`
+- JSON format: `{ timestamp, level, service, correlationId, userId, message, context }`
+- **Risk**: Low-Medium | **Effort**: Medium-Large
+
+### What Stays Unchanged
+
+- Domain entities (Round, Bet, CrashPoint, Wallet, Money) — zero changes
+- Use cases (PlaceBetUseCase, CashOutUseCase, DebitWalletUseCase, etc.) — zero changes
+- DTOs — zero changes
+- Repository interfaces + implementations — zero changes
+- Database migrations — zero changes
+- RabbitMQ queue/exchange topology — zero changes
+- Frontend — zero changes (correlation ID is server-to-server concern)
+- All existing tests — no behavioral change
+
+### MVP (Phases 1 + 2)
+Correlation IDs flow through HTTP requests, appear in response headers, logged by interceptor. Enough to debug most HTTP request chains.
+
+### Full (Phases 1-3)
+Adds RabbitMQ event correlation + correlationId in error responses. Covers: (1) failed HTTP requests, (2) async wallet processing failures, (3) mapping HTTP bet placement → async wallet debit.
+
+### Complete (Phases 1-5)
+Full structured JSON logging across all services — every log line has correlationId, userId, service name.
