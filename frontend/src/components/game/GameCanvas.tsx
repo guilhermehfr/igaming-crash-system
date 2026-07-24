@@ -1,5 +1,6 @@
 import { Lock } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useCanvasRenderer } from '@/hooks/useCanvasRenderer';
 import type { RevealedSeed, RoundState } from '@/contexts/SocketContext';
 import { formatMultiplier } from '@/lib/format';
 import { roundStateToTextColor } from '@/lib/round-state';
@@ -20,6 +21,52 @@ export function GameCanvas({
   seedHistory: RevealedSeed[];
   revealSeed: () => Promise<void>;
 }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fallbackRef = useRef(1);
+  const [localMult, setLocalMult] = useState(0);
+
+  const isDisconnected = currentMultiplier === undefined;
+
+  const prevStateRef = useRef(roundState);
+  const runningStartRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (roundState === 'running' && prevStateRef.current !== 'running') {
+      runningStartRef.current = Date.now();
+    } else if (roundState !== 'running') {
+      runningStartRef.current = null;
+    }
+    prevStateRef.current = roundState;
+  }, [roundState]);
+
+  useEffect(() => {
+    if (roundState === 'betting') {
+      fallbackRef.current = 1;
+      setLocalMult(0);
+      return;
+    }
+    if (roundState === 'running' && isDisconnected) {
+      fallbackRef.current = 1;
+      const id = setInterval(() => {
+        fallbackRef.current += 0.01;
+        setLocalMult(fallbackRef.current);
+      }, 100);
+      return () => clearInterval(id);
+    }
+  }, [roundState, isDisconnected]);
+
+  const effectiveMult = isDisconnected
+    ? roundState === 'betting' ? 0 : localMult
+    : (currentMultiplier ?? 0);
+
+  const displayM = effectiveMult === 0 && roundState === 'betting' ? 1.0 : effectiveMult;
+
+  const crashPoint = roundState === 'crashed'
+    ? effectiveMult
+    : Math.max(effectiveMult * 2, 3);
+
+  useCanvasRenderer(canvasRef, roundState, effectiveMult, crashPoint, runningStartRef.current);
+
   if (roundState === null) {
     return (
       <div className="relative flex flex-1 overflow-hidden">
@@ -28,12 +75,14 @@ export function GameCanvas({
     );
   }
 
-  const multiplier = currentMultiplier ?? 1.0;
-  const displayM = roundState === 'betting' ? 1.0 : multiplier;
-
   return (
     <div className="relative flex flex-1 overflow-hidden">
       <div className="absolute inset-0" style={gridBackgroundStyle()} />
+
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 z-[1]"
+      />
 
       <div className="absolute top-6 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-1.5">
         <span className="text-xs font-medium uppercase tracking-widest text-slate-500">
@@ -44,9 +93,9 @@ export function GameCanvas({
         )}
       </div>
 
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="absolute inset-0 z-10 flex items-center justify-center">
         <span
-          className={`font-heading font-bold tabular-nums tracking-tight transition-colors duration-200 mt-16 md:mt-0 ${roundStateToTextColor(roundState)}`}
+          className={`font-heading font-bold tabular-nums tracking-tight mt-16 md:mt-0 ${roundStateToTextColor(roundState)}`}
           style={{
             fontSize: 'clamp(3rem, 14vw, 9rem)',
             lineHeight: 1,

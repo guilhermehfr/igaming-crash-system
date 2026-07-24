@@ -132,6 +132,16 @@ services:
       retries: 10
       start_period: 15s
 
+  frontend:
+    build:
+      context: .
+      dockerfile: ./frontend/Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      kong:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   rabbitmq_data:
