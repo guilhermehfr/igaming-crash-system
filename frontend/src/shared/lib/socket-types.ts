@@ -19,5 +19,5 @@ export type RevealedSeed = {
 export type CrashRound = {
   id: number;
   multiplier: number;
-  type: 'cashed' | 'busted' | 'none';
+  type: 'cashed' | 'crashed' | 'none';
 };

@@ -7,7 +7,7 @@ export const NEXT_STATE: Record<string, RoundState> = {
 };
 
 export function betStateToLabel(state: string): string {
-  if (state === 'lost') return 'BUSTED';
+  if (state === 'lost') return 'CRASHED';
   if (state === 'cashed_out') return 'CASHED OUT';
   if (state === 'pending') return 'In Position';
   return 'No Position';
@@ -44,6 +44,6 @@ export function betOutcomeToDisplayText(outcome: LiveBet['outcome']): string {
 
 export function crashTypeToColor(type: CrashRound['type']): string {
   if (type === 'cashed') return 'bg-neon-green/10 border border-neon-green/30 text-neon-green';
-  if (type === 'busted') return 'bg-loss-red/10 border border-loss-red/40 text-loss-red';
+  if (type === 'crashed') return 'bg-loss-red/10 border border-loss-red/40 text-loss-red';
   return 'bg-slate-500/10 border border-slate-500/30 text-slate-500';
 }
