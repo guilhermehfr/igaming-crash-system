@@ -1,10 +1,8 @@
-import { useAuth } from '@/app/providers/AuthContext';
-import { useSocket } from '@/app/providers/SocketContext';
+import { useAuth, useSocket } from '@/app/providers';
 import { BalanceDisplay } from '@/entities/wallet';
 import { ActionButton, BetInput, BetMessages, PositionStatus, useBet } from '@/features/place-bet';
-import { getActionType } from '@/shared/lib/action-button';
-import { NEXT_STATE } from '@/shared/lib/round-state';
 import type { RoundState } from '@/shared/lib/socket-types';
+import { useRightPanel } from '@/widgets/right-panel/model/useRightPanel';
 
 type RightPanelProps = {
   roundState: RoundState;
@@ -30,40 +28,29 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
     handleCashOut,
   } = useBet(roundState ?? 'betting');
 
-  if (!user) return null;
-
-  const effectiveState = roundState ?? 'betting';
-  const isLoadingRound = roundState === null && connected;
-  const actionType = getActionType(
-    myBetState,
+  const {
     effectiveState,
-    connected,
-    actionLoading,
     isLoadingRound,
+    actionType,
+    showingBetAmount,
+    inputDisabled,
+    buttonDisabled,
+    handleClick,
+    cycleState,
+  } = useRightPanel(
+    roundState,
+    connected,
+    myBetState,
+    myBetAmount,
+    actionLoading,
+    betAmount,
+    balance,
+    handlePlaceBet,
+    handleCashOut,
+    setRoundState,
   );
-  const isDevCycle = !connected && (myBetState === 'lost' || effectiveState === 'crashed');
 
-  const showingBetAmount = myBetState !== 'none' ? myBetAmount : null;
-
-  const inputDisabled =
-    effectiveState !== 'betting' || !connected || myBetState === 'pending' || isLoadingRound;
-
-  const buttonDisabled =
-    isLoadingRound ||
-    actionLoading ||
-    myBetState === 'cashed_out' ||
-    myBetState === 'lost' ||
-    (effectiveState === 'betting' && myBetState === 'pending') ||
-    (effectiveState === 'betting' && (balance === null || betAmount <= 0 || betAmount > balance)) ||
-    (effectiveState === 'running' && myBetState !== 'pending');
-
-  const handleClick = isDevCycle
-    ? () => setRoundState(NEXT_STATE[effectiveState])
-    : effectiveState === 'running' && myBetState === 'pending'
-      ? handleCashOut
-      : effectiveState === 'betting' && myBetState === 'none'
-        ? handlePlaceBet
-        : () => {};
+  if (!user) return null;
 
   return (
     <aside className="flex w-full shrink-0 flex-col border-t border-slate-800/60 bg-deep-slate/80 md:w-100 md:border-l">
@@ -100,7 +87,7 @@ export function RightPanel({ roundState, setRoundState, connected }: RightPanelP
         {!connected ? (
           <button
             type="button"
-            onClick={() => setRoundState(NEXT_STATE[effectiveState])}
+            onClick={cycleState}
             className="w-full rounded-lg bg-slate-800/60 px-3 py-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-700/60 hover:text-slate-300"
           >
             DEV: cycle state ({effectiveState})

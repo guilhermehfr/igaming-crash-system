@@ -1,6 +1,6 @@
 import { Rocket } from 'lucide-react';
 import { useState } from 'react';
-import { useAuth } from '@/app/providers/AuthContext';
+import { useAuth } from '@/app/providers';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
 

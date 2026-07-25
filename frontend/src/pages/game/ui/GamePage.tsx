@@ -1,6 +1,5 @@
-import { useState } from 'react';
-import { SocketProvider, useSocket } from '@/app/providers/SocketContext';
-import type { RoundState } from '@/shared/lib/socket-types';
+import { SocketProvider, useSocket } from '@/app/providers';
+import { useDisconnectedGame } from '@/pages/game/model/useDisconnectedGame';
 import { GameCanvas } from '@/widgets/game-canvas';
 import { LiveBets } from '@/widgets/live-bets';
 import { RightPanel } from '@/widgets/right-panel';
@@ -17,16 +16,10 @@ function GamePageContent() {
     revealSeed,
   } = useSocket();
 
-  const [localState, setLocalState] = useState<RoundState>('betting');
-  const [localRound, setLocalRound] = useState(8291);
+  const { localState, handleLocalState } = useDisconnectedGame();
 
   const effectiveState = connected ? roundState : localState;
-  const effectiveRound = connected ? roundNumber : localRound;
-
-  const handleLocalState = (state: RoundState) => {
-    setLocalState(state);
-    if (state === 'betting') setLocalRound((n) => n + 1);
-  };
+  const effectiveRound = connected ? roundNumber : undefined;
 
   return (
     <main className="flex min-h-dvh w-full flex-col bg-deep-slate">
@@ -35,7 +28,7 @@ function GamePageContent() {
         <LiveBets />
         <GameCanvas
           roundState={effectiveState}
-          roundNumber={effectiveRound}
+          roundNumber={effectiveRound ?? 0}
           currentMultiplier={connected ? currentMultiplier : undefined}
           seedHash={connected ? seedHash : ''}
           seedHistory={seedHistory}

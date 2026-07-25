@@ -1,7 +1,6 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
-import { useAuth } from '@/app/providers/AuthContext';
-import { useSocket } from '@/app/providers/SocketContext';
+import { useAuth, useSocket } from '@/app/providers';
 import { formatCurrency } from '@/shared/lib/format';
 import { CrashHistoryPills } from '@/widgets/crash-history';
 

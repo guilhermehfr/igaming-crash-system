@@ -1,5 +1,5 @@
 import { ErrorBoundary } from '@/app/ErrorBoundary';
-import { AuthProvider, useAuth } from '@/app/providers/AuthContext';
+import { AuthProvider, QueryProvider, useAuth } from '@/app/providers';
 import { GamePage } from '@/pages/game';
 import { LoginPage } from '@/pages/login';
 
@@ -18,9 +18,11 @@ function AppContent() {
 function App() {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      <QueryProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </QueryProvider>
     </ErrorBoundary>
   );
 }

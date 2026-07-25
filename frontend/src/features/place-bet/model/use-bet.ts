@@ -1,22 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAuth } from '@/app/providers/AuthContext';
-import { useSocket } from '@/app/providers/SocketContext';
-import { apiFetch } from '@/shared/api/api';
-import { config } from '@/shared/config/config';
+import { useAuth, useSocket } from '@/app/providers';
+import { useBetActions } from '@/features/place-bet/model/useBetActions';
+import { useBetState } from '@/features/place-bet/model/useBetState';
 import { BET, calculateWinnings } from '@/shared/lib/bet-utils';
+import { useBalance } from '@/shared/lib/hooks';
 import type { RoundState } from '@/shared/lib/socket-types';
 
 export function useBet(roundState: RoundState) {
   const { user } = useAuth();
-  const { balance, refreshBalance, currentMultiplier } = useSocket();
+  const { currentMultiplier } = useSocket();
+  const { balance: rawBalance, refreshBalance } = useBalance(user?.id);
+  const balance = rawBalance ?? 0;
 
+  const [betState, dispatch] = useBetState();
   const [betAmount, setBetAmount] = useState<number>(BET.DEFAULT);
-  const [myBetId, setMyBetId] = useState<string | null>(null);
-  const [myBetAmount, setMyBetAmount] = useState(0);
-  const [myBetMultiplier, setMyBetMultiplier] = useState<number | null>(null);
-  const [myBetState, setMyBetState] = useState<'none' | 'pending' | 'cashed_out' | 'lost'>('none');
   const [actionLoading, setActionLoading] = useState(false);
-  const [betError, setBetError] = useState<string | null>(null);
   const currentMultiplierRef = useRef(1.0);
 
   useEffect(() => {
@@ -25,106 +23,69 @@ export function useBet(roundState: RoundState) {
 
   useEffect(() => {
     if (roundState === 'betting') {
-      setMyBetId(null);
-      setMyBetState('none');
-      setMyBetAmount(0);
-      setMyBetMultiplier(null);
-      setBetError(null);
+      dispatch({ type: 'RESET' });
     }
-  }, [roundState]);
+  }, [roundState, dispatch]);
 
   useEffect(() => {
-    if (roundState === 'crashed' && myBetState === 'pending') {
-      setMyBetState('lost');
+    if (roundState === 'crashed' && betState.state === 'pending') {
+      dispatch({ type: 'LOSE' });
     }
-  }, [roundState, myBetState]);
+  }, [roundState, betState.state, dispatch]);
 
-  const showInsufficientBalance =
-    betError === null &&
-    betAmount > (balance ?? 0) &&
-    roundState === 'betting' &&
-    myBetState === 'none';
-
-  const winnings =
-    myBetState === 'cashed_out' && myBetMultiplier
-      ? calculateWinnings(myBetAmount, myBetMultiplier)
-      : 0;
-
-  const showPayout = myBetState === 'cashed_out' || myBetState === 'lost';
+  const { handlePlaceBet: rawPlaceBet, handleCashOut: rawCashOut } = useBetActions(
+    dispatch,
+    user,
+    betAmount,
+    betState.betId,
+    refreshBalance,
+    currentMultiplierRef,
+  );
 
   const handlePlaceBet = useCallback(async () => {
-    if (!user || actionLoading) return;
+    if (actionLoading) return;
     setActionLoading(true);
-    setBetError(null);
-    try {
-      const res = await apiFetch(`${config.apiUrl}/games/bets`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amountInMainUnit: betAmount }),
-      });
-      if (!res.ok) {
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const data = await res.json();
-          setBetError(data.message || 'Bet rejected');
-        } else {
-          setBetError('Bet rejected');
-        }
-        return;
-      }
-      const data = await res.json();
-      setMyBetId(data.id);
-      setMyBetAmount(data.amountInMainUnit);
-      setMyBetState('pending');
-      await refreshBalance(user.id);
-    } catch (err) {
-      if (config.isDev) console.error('Place bet error:', err);
-      setBetError('Network error — please try again');
-    } finally {
-      setActionLoading(false);
-    }
-  }, [user, actionLoading, betAmount, refreshBalance]);
+    await rawPlaceBet();
+    setActionLoading(false);
+  }, [actionLoading, rawPlaceBet]);
 
   const handleCashOut = useCallback(async () => {
-    if (!myBetId || !user || actionLoading) return;
+    if (actionLoading || !betState.betId) return;
     setActionLoading(true);
-    try {
-      const res = await apiFetch(`${config.apiUrl}/games/bets/${myBetId}/cash-out`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          multiplier: currentMultiplierRef.current > 0 ? currentMultiplierRef.current : 1.0,
-        }),
-      });
-      if (!res.ok) {
-        if (config.isDev) console.error('Cash out failed:', await res.text());
-        return;
-      }
-      const data = await res.json();
-      setMyBetState('cashed_out');
-      setMyBetMultiplier(data.multiplier);
-      await refreshBalance(user.id);
-    } catch (err) {
-      if (config.isDev) console.error('Cash out error:', err);
-    } finally {
-      setActionLoading(false);
-    }
-  }, [myBetId, user, actionLoading, refreshBalance]);
+    await rawCashOut();
+    setActionLoading(false);
+  }, [actionLoading, betState.betId, rawCashOut]);
 
-  const setBetAmountWithErrorClear = useCallback((n: number | ((prev: number) => number)) => {
-    setBetAmount(n);
-    setBetError(null);
-  }, []);
+  const showInsufficientBalance =
+    betState.error === null &&
+    betAmount > balance &&
+    roundState === 'betting' &&
+    betState.state === 'none';
+
+  const winnings =
+    betState.state === 'cashed_out' && betState.multiplier
+      ? calculateWinnings(betState.amount, betState.multiplier)
+      : 0;
+
+  const showPayout = betState.state === 'cashed_out' || betState.state === 'lost';
+
+  const setBetAmountWithErrorClear = useCallback(
+    (n: number | ((prev: number) => number)) => {
+      setBetAmount(n);
+      dispatch({ type: 'CLEAR_ERROR' });
+    },
+    [dispatch],
+  );
 
   return {
     betAmount,
     setBetAmount: setBetAmountWithErrorClear,
-    myBetId,
-    myBetState,
-    myBetAmount,
-    myBetMultiplier,
+    myBetId: betState.betId,
+    myBetState: betState.state,
+    myBetAmount: betState.amount,
+    myBetMultiplier: betState.multiplier,
     actionLoading,
-    betError,
+    betError: betState.error,
     showInsufficientBalance,
     winnings,
     showPayout,

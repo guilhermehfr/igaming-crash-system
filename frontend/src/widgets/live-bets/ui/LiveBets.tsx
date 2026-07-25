@@ -1,4 +1,4 @@
-import { useSocket } from '@/app/providers/SocketContext';
+import { useSocket } from '@/app/providers';
 import { formatCurrency } from '@/shared/lib/format';
 import { betOutcomeToColor, betOutcomeToDisplayText } from '@/shared/lib/round-state';
 

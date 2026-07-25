@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import type { RoundState } from '../socket-types';
-import { computePoints, drawLine } from './crash-curve';
+import { computePoints, drawLine } from '@/shared/lib/canvas/crash-curve';
+import type { RoundState } from '@/shared/lib/socket-types';
 
 export function useCanvasRenderer(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
