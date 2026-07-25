@@ -1,7 +1,7 @@
-import { LoginPage } from '@/components/auth/LoginPage';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { GamePage } from '@/components/game/GamePage';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { ErrorBoundary } from '@/app/ErrorBoundary';
+import { AuthProvider, useAuth } from '@/app/providers/AuthContext';
+import { GamePage } from '@/pages/game';
+import { LoginPage } from '@/pages/login';
 
 function AppContent() {
   const { user, isLoading } = useAuth();

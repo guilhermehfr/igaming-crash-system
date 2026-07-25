@@ -1,8 +1,8 @@
 import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
-import { config } from '@/config';
-import { apiFetch } from '@/lib/api';
-import { keycloakLogin } from '@/lib/auth';
-import { STORAGE } from '@/lib/storage-keys';
+import { apiFetch } from '@/shared/api/api';
+import { keycloakLogin } from '@/shared/api/auth';
+import { config } from '@/shared/config/config';
+import { STORAGE } from '@/shared/config/storage-keys';
 
 export type AuthUser = {
   id: string;

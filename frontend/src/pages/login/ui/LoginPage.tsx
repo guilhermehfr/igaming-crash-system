@@ -1,5 +1,5 @@
-import { LoginForm } from '@/components/auth/LoginForm';
-import { BrandPanel } from '@/components/brand/BrandPanel';
+import { LoginForm } from '@/features/auth-by-password';
+import { BrandPanel } from '@/widgets/brand-panel';
 
 export function LoginPage() {
   return (

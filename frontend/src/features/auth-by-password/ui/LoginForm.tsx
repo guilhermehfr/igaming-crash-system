@@ -1,8 +1,8 @@
 import { Rocket } from 'lucide-react';
 import { useState } from 'react';
-import { Button } from '@/components/primitives/Button';
-import { Input } from '@/components/primitives/Input';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/app/providers/AuthContext';
+import { Button } from '@/shared/ui/Button';
+import { Input } from '@/shared/ui/Input';
 
 export function LoginForm() {
   const [username, setUsername] = useState('');
@@ -70,18 +70,6 @@ export function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-        </div>
-
-        <div className="flex items-center">
-          <input
-            id="remember-me"
-            name="remember-me"
-            type="checkbox"
-            className="h-4 w-4 rounded-sm border-slate-700 bg-slate-900 text-cyber-green focus:ring-cyber-green focus:ring-offset-deep-slate accent-cyber-green"
-          />
-          <label htmlFor="remember-me" className="ml-3 block text-sm text-slate-400">
-            Remember me
-          </label>
         </div>
 
         {error && <p className="text-red-400 text-sm text-center">{error}</p>}
