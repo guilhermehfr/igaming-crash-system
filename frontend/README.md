@@ -64,10 +64,22 @@ const socket = io("wss://api.example.com");
 
 Services are not publicly exposed — only accessible via Kong through the Docker network.
 
+## State Management
+
+4 Zustand stores manage client state with selector-based re-render isolation:
+- **auth-store**: User identity, login/logout, persisted to localStorage
+- **game-store**: Round state, multiplier, bets, crash history (ephemeral)
+- **balance-store**: Wallet balance number (ephemeral)
+- **seed-store**: Provably fair seed hash and history, persisted to sessionStorage
+
+TanStack Query fetches wallet balance with 15s staleTime and refetchOnWindowFocus.
+
 ## Auth Flow
 
+Auth state managed by Zustand `auth-store` (persisted to localStorage via `zustand/middleware/persist`).
+
 ### Development
-The `apiFetch` helper sends `X-User-Id` and `Authorization: Bearer <token>` from stored auth data. Kong forwards the identity to the service:
+The `apiFetch` helper reads `X-User-Id` and `Authorization: Bearer <token>` from the store's persisted data. Kong forwards the identity to the service:
 
 ```ts
 fetch("/games/current", {
@@ -75,7 +87,7 @@ fetch("/games/current", {
 });
 ```
 
-On first login, `AuthContext.ensureWalletCreated()` uses a direct `fetch` (not `apiFetch`) with explicit `X-User-Id` header — wallet is keyed by userId only.
+On first login, `auth-store.login()` calls `ensureWalletCreated()` using a direct `fetch` (not `apiFetch`) with explicit `X-User-Id` header — wallet is keyed by userId only.
 
 ### Production
 JWT from Keycloak is required. Kong validates the JWT, extracts the `sub` claim, and injects `X-User-Id` + `X-Gateway-Authenticated` headers. Client-provided identity headers are stripped by Kong — spoofing is not possible.

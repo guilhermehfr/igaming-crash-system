@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **iGaming Crash System** is a microservices-based betting platform with an explicit state machine for crash game rounds. The codebase uses **Domain-Driven Design (DDD)** and **Hexagonal Architecture** with **Bun** as the runtime and **NestJS** as the application framework.
 
-**Status**: Domain layer ✅ complete (1,247 lines). Application layer ✅ complete (824 lines games + 376 lines wallets). Infrastructure layer ✅ complete (841 lines). Docker environment ✅ operational. Presentation layer: Games ✅ (11 endpoints), Wallets ✅ (5 endpoints). Provably Fair ✅ complete (HMAC seed chain, 4 API endpoints, server seed rotation). Testing ✅ complete (140 tests: 106 unit + 34 E2E). Frontend ✅ complete (game canvas, socket context, auth layer, UI components, place-bet/cash-out API integration, wallet creation on login).
+**Status**: Domain layer ✅ complete (787 lines). Application layer ✅ complete (1,062 lines). Infrastructure layer ✅ complete (1,195 lines). Docker environment ✅ operational. Presentation layer: Games ✅ (11 endpoints), Wallets ✅ (5 endpoints). Provably Fair ✅ complete (HMAC seed chain, 4 API endpoints, server seed rotation). Testing ✅ complete (127 tests: 103 unit + 24 E2E). Frontend ✅ complete (game canvas, Zustand stores, auth layer, FSD architecture, place-bet/cash-out API integration, wallet creation on login).
 
 ## Core Architecture
 
@@ -51,50 +51,59 @@ services/
 │       └── presentation/     ✅ Complete: 5 endpoints (health, create, get, debit, credit)
 frontend/
 ├── src/
-│   ├── App.tsx               Root: AuthProvider → AppContent (LoginPage | GamePage)
-│   ├── main.tsx              Entry point
-│   ├── config.ts             Env vars config (apiUrl, isDev)
-│   ├── index.css             Tailwind 4 + custom theme (colors, fonts)
-   │   ├── lib/
-   │   │   ├── auth.ts             keycloakLogin() — OIDC password grant
-   │   │   ├── api.ts              apiFetch() — env-aware header injection
-   │   │   ├── format.ts           formatCurrency, formatMultiplier
-   │   │   ├── storage-keys.ts     STORAGE.AUTH, STORAGE.SEED_HISTORY
-   │   │   ├── round-state.ts      State→label/color/glow mappings
-   │   │   ├── bet-utils.ts        Validation, presets, winnings calc
-   │   │   ├── action-button.ts    getActionType/getActionLabel
-   │   │   ├── display.ts          toDisplayName
-   │   │   └── styles.ts           gridBackgroundStyle
-   │   ├── hooks/
-   │   │   └── useBet.ts           Bet state + API + effects, reads multiplier from context
-   │   ├── contexts/
-│   │   ├── AuthContext.tsx    Keycloak login, dev fallback, localStorage hydration
-│   │   └── SocketContext.tsx  Socket.io connection, round state, multiplier, bets
-│   └── components/
-│       ├── auth/
-│       │   ├── LoginForm.tsx  Email/password form, async submit, error display
-│       │   └── LoginPage.tsx  Split layout: BrandPanel + LoginForm
-│       ├── brand/
-│       │   └── BrandPanel.tsx Rocket logo + CRASH_SYSTEM heading
-│       ├── game/
-│       │   ├── GameCanvas.tsx      HTML5 Canvas crash graph, exponential curve, rocket, explosion, round-state multiplier colors
-│       │   ├── GamePage.tsx        Layout: LiveBets + GameCanvas + RightPanel, dual-mode routing
-│       │   ├── RightPanel.tsx      115 lines — delegates to useBet hook + 5 sub-components
-│       │   ├── BalanceDisplay.tsx  Balance row
-│       │   ├── PositionStatus.tsx  Position dot + bet/payout grid
-│       │   ├── ActionButton.tsx    4-variant button (place-bet/cash-out)
-│       │   ├── BetMessages.tsx     Error / insufficient balance display
-│       │   ├── BetInput.tsx        $ input + 1x/2x/MAX quick buttons
-│       │   ├── TopBar.tsx          Brand + CrashHistoryPills + balance display
-│       │   ├── CrashHistoryPills.tsx  Draggable scrollable pills, per-user bet coloring (cashed/busted/none)
-│       │   └── LiveBets.tsx        Live bet feed from SocketContext
-│       └── primitives/
-│           ├── Button.tsx      tailwind-variants button (primary, ghost, sizes)
-│           └── Input.tsx       Styled input with focus ring
+│   ├── app/
+│   │   ├── App.tsx               Root: ErrorBoundary → QueryProvider → AppContent (LoginPage | GamePage)
+│   │   ├── ErrorBoundary.tsx     React error boundary with fallback UI
+│   │   ├── entrypoint/main.tsx   ReactDOM.createRoot + StrictMode
+│   │   ├── providers/
+│   │   │   └── QueryProvider.tsx  TanStack Query client provider
+│   │   └── styles/index.css      Tailwind 4 + custom theme (colors, fonts)
+│   ├── entities/
+│   │   └── wallet/ui/BalanceDisplay.tsx  Balance row
+│   ├── features/
+│   │   ├── auth-by-password/
+│   │   │   └── ui/LoginForm.tsx  Email/password form, async submit, error display
+│   │   ├── mock-bets/
+│   │   │   └── model/useMockBets.ts  Simulated players with pre-determined cash-out targets
+│   │   └── place-bet/
+│   │       ├── model/use-bet.ts      Orchestrator hook: bet state + API + effects
+│   │       ├── model/useBetActions.ts  API calls for place/cash-out
+│   │       ├── model/useBetState.ts    useReducer for bet lifecycle
+│   │       └── ui/ (ActionButton, BetInput, BetMessages, PositionStatus)
+│   ├── pages/
+│   │   ├── game/ui/GamePage.tsx      Layout: LiveBets + GameCanvas + RightPanel, dual-mode routing
+│   │   └── login/ui/LoginPage.tsx    Split layout: BrandPanel + LoginForm
+│   ├── shared/
+│   │   ├── api/ (api.ts, auth.ts)         keycloakLogin() + apiFetch()
+│   │   ├── config/ (config.ts, storage-keys.ts)
+│   │   ├── lib/
+│   │   │   ├── stores/
+│   │   │   │   ├── auth-store.ts     Zustand: user state, login/logout, persist to localStorage
+│   │   │   │   ├── balance-store.ts  Zustand: balance number
+│   │   │   │   ├── game-store.ts     Zustand: round state, multiplier, bets, crash history
+│   │   │   │   └── seed-store.ts     Zustand: provably fair seeds, persist to sessionStorage
+│   │   │   ├── hooks/
+│   │   │   │   ├── useSocketConnection.ts  Core socket hook, dispatches to game-store
+│   │   │   │   ├── useBalance.ts           TanStack Query wrapper for wallet balance
+│   │   │   │   ├── useSocketReducer.ts     useReducer alternative for socket state
+│   │   │   │   └── useSeedState.ts         useState + sessionStorage alternative
+│   │   │   ├── canvas/ (computePoints, drawLine, drawRocket, drawExplosion)
+│   │   │   ├── format.ts, display.ts, round-state.ts, bet-utils.ts
+│   │   │   ├── action-button.ts, styles.ts, socket-types.ts
+│   │   │   └── mock-users.ts
+│   │   └── ui/ (Button.tsx, Input.tsx)  tailwind-variants primitives
+│   └── widgets/
+│       ├── brand-panel/ui/BrandPanel.tsx     Rocket logo + CRASH_SYSTEM heading
+│       ├── crash-history/ui/CrashHistoryPills.tsx  Draggable scrollable pills
+│       ├── game-canvas/ui/GameCanvas.tsx      HTML5 Canvas crash graph
+│       ├── game-canvas/model/useCanvasRenderer.ts   rAF render loop
+│       ├── live-bets/ui/LiveBets.tsx          Live bet feed from game-store
+│       ├── right-panel/ui/RightPanel.tsx      115 lines — delegates to useBet hook + 5 sub-components
+│       └── top-bar/ui/TopBar.tsx              Brand + CrashHistoryPills + BalanceDisplay
 ├── .env                      Local env overrides (gitignored)
 ├── .env.example              Committed env template
 ├── vite.config.ts            Vite + path aliases + proxy to Kong
-└── package.json              React 19, Vite 8, socket.io-client, tailwind-variants
+└── package.json              React 19, Vite 8, socket.io-client, zustand, @tanstack/react-query, tailwind-variants
 ```
 
 ## Domain Layer (The Heart of the System)
@@ -378,32 +387,37 @@ interface IWalletRepository {
 **1. Demo Session Wallet Bug**
 - **Problem**: After closing an incognito tab and opening a new one, the balance wouldn't load. Wallets were keyed by `(userId, demoSessionId)` pair — each browser tab got its own wallet. On second login the `refreshBalance` call used a new session ID that didn't match the new wallet's session ID, causing a lookup miss.
 - **Solution**: Removed demo session dependency from wallet operations. `ensureWalletCreated` no longer sends `X-Demo-Session` header. `apiFetch` no longer injects `X-Demo-Session`. All wallet lookups use `userId` only via `findByUserId()`. Demo session remains for display names in socket events.
-- **Files**: `frontend/src/contexts/AuthContext.tsx`, `frontend/src/lib/api.ts`
+- **Files**: `frontend/src/shared/lib/stores/auth-store.ts`, `frontend/src/shared/api/api.ts`
 
 **2. Quick Button Behavior**
 - **Problem**: 1x set to 1% of balance (absolute), 2x set to 2% of balance (absolute). Clicking 2x again did nothing (same absolute value), confusing users.
 - **Solution**: 1x now sets a fixed default of $10 (`Math.min(10, balance)`). 2x doubles the current `betAmount` input value (capped at balance). MAX stays all-in.
-- **Files**: `frontend/src/components/game/RightPanel.tsx`
+- **Files**: `frontend/src/widgets/right-panel/ui/RightPanel.tsx`
 
 **3. Mock Bet Cash-Out Interval**
 - **Problem**: The mock bet cash-out interval (800ms) was destroyed and recreated every 100ms because `currentMultiplier` was in the effect's dependency array. The interval callback never fired — all mock bets stayed pending, then all became lost on crash.
 - **Solution**: Added `currentMultiplierRef` holding the latest multiplier. Interval callback reads the ref, not state. Removed `currentMultiplier` from effect deps — interval lives for the full RUNNING phase.
-- **Files**: `frontend/src/contexts/SocketContext.tsx`
+- **Files**: `frontend/src/shared/lib/hooks/useSocketConnection.ts` (moved from SocketContext)
 
 **4. Mock Bet Cash-Out Logic**
 - **Problem**: Mock bets used a probability formula where all bets shared the same cash-out probability at the same multiplier. Minimum target was 1.1x (10+ seconds) — too high for short rounds.
 - **Solution**: Each mock bet gets a pre-determined `cashOutAt` target: 35% conservative (1.01–1.2x), 20% moderate (1.21–2.0x), 15% aggressive (2.01–5.0x), 30% let-it-ride (null). Cash-out triggers when `currentMultiplier >= cashOutAt`.
-- **Files**: `frontend/src/lib/mock-users.ts`
+- **Files**: `frontend/src/lib/mock-users.ts` (moved to `frontend/src/shared/lib/mock-users.ts`)
 
 **5. Mobile Responsive Layout**
 - **Problem**: LiveBets sidebar always visible, taking space on mobile. Layout was a single flex row that overflowed on small screens.
 - **Solution**: LiveBets `hidden md:flex`. GamePage `flex-col md:flex-row`. RightPanel `w-full md:w-[25rem]` with `border-t md:border-l`.
-- **Files**: `frontend/src/components/game/LiveBets.tsx`, `frontend/src/components/game/GamePage.tsx`, `frontend/src/components/game/GameCanvas.tsx`, `frontend/src/components/game/RightPanel.tsx`
+- **Files**: `frontend/src/widgets/live-bets/ui/LiveBets.tsx`, `frontend/src/pages/game/ui/GamePage.tsx`, `frontend/src/widgets/game-canvas/ui/GameCanvas.tsx`, `frontend/src/widgets/right-panel/ui/RightPanel.tsx`
 
 **6. Keycloak Health Check**
 - **Problem**: Kong's `depends_on` didn't wait for Keycloak. Health check used `wget` (not in the image).
 - **Solution**: Added `keycloak` to Kong's `depends_on` with `condition: service_healthy`. Changed health check to `exec 3<>/dev/tcp/localhost:9000` (bash TCP).
 - **Files**: `docker-compose.yml`
+
+**7. React Context → Zustand Stores Migration (2026-07-26)**
+- **Problem**: AuthContext and SocketContext were React Context providers wrapping the app tree. Every state update caused all consumers to re-render (no selector isolation). login()/logout() logic mixed with state. Socket event handling coupled to provider lifecycle.
+- **Solution**: Replaced both contexts with 4 Zustand stores (`auth-store`, `balance-store`, `game-store`, `seed-store`). `useSocketConnection()` became a plain hook that dispatches to stores via `getState()`. `useBalance()` uses `@tanstack/react-query` with 15s staleTime. Zustand persist middleware handles localStorage/sessionStorage serialization. Migrated to Feature-Sliced Design directory structure.
+- **Files**: `frontend/src/shared/lib/stores/*.ts`, `frontend/src/shared/lib/hooks/useSocketConnection.ts`, `frontend/src/shared/lib/hooks/useBalance.ts`, multiple consumers across all layers
 
 ## Technology Stack
 
@@ -416,6 +430,7 @@ interface IWalletRepository {
 - **API Gateway**: Kong 3.9.1 (DB-less, declarative config)
 - **Auth**: Keycloak 26.5.5 (OIDC/OAuth2)
 - **Real-Time**: Socket.io 4.8.3 (games service) / socket.io-client 4.8.3 (frontend) - ✅ implemented
+- **State Management**: Zustand 5.x (frontend stores) + @tanstack/react-query 5.x (server cache)
 - **Testing**: Bun native test framework
 
 ## Environment Variables
@@ -866,58 +881,85 @@ balanceInCentavos: bigint
 
 ```
 App
-└── AuthProvider
-    └── AppContent
-        ├── LoginPage (when no user)
-        │   ├── BrandPanel
-        │   └── LoginForm
-        └── GamePage (when authenticated)
-            └── SocketProvider
+└── ErrorBoundary
+    └── QueryProvider
+        └── AppContent
+            ├── LoginPage (when no user)
+            │   ├── BrandPanel
+            │   └── LoginForm (calls auth-store)
+            └── GamePage (when authenticated)
                 └── GamePageContent
+                    ├── useSocketConnection()    ← hook, not provider
+                    │   └── dispatches to game-store + seed-store
                     ├── TopBar
-                    │   └── CrashHistoryPills
-                    ├── LiveBets
-                    ├── GameCanvas
-                    └── RightPanel
-                        ├── BalanceDisplay
+                    │   ├── BrandPanel
+                    │   └── CrashHistoryPills (reads game-store)
+                    ├── LiveBets (reads game-store)
+                    ├── GameCanvas + SeedRevealPanel
+                    └── RightPanel (reads game-store, writes via bet actions)
+                        ├── BalanceDisplay (reads balance-store)
                         ├── PositionStatus
                         ├── ActionButton
                         ├── BetMessages
                         └── BetInput
 ```
 
+### Zustand Stores — The State Backbone
+
+State management moved from React Contexts to 4 Zustand stores. No context providers wrapping the app tree. Components use selector-based subscriptions for granular re-renders.
+
+**auth-store** (`frontend/src/shared/lib/stores/auth-store.ts`):
+- State: `user: { id, username, token } | null`, `isLoading: boolean`
+- Actions: `login()` (Keycloak OIDC), `logout()`, `setUser()`, `setLoading()`
+- Persistence: localStorage via `zustand/middleware/persist` (key: `igaming-auth`)
+- On network error in dev mode: falls back to static `DEV_USER_ID` UUID — no JWT, no server dependency
+- On 401: throws to form for error display
+- Wallet creation via `ensureWalletCreated()`: direct `fetch` with explicit `X-User-Id` header only — wallet keyed by userId alone. Called before `setUser()` to avoid race between socket connect and wallet existence.
+
+**game-store** (`frontend/src/shared/lib/stores/game-store.ts`):
+- State: `connected`, `roundState`, `currentMultiplier`, `syncError`, `roundNumber`, `crashHistory`, `hasBet`, `bets: LiveBet[]`, `playingCount`
+- Actions: `setConnected`, `setDisconnected`, `setError`, `initRound`, `startBetting`, `setRoundState`, `updateMultiplier`, `setHasBet`, `setCrashed`, `incrementRound`, `setBets`, `addBet`, `updateBet`, `reset`
+- No persistence (ephemeral game state)
+
+**balance-store** (`frontend/src/shared/lib/stores/balance-store.ts`):
+- State: `balance: number | null`
+- Action: `setBalance()`
+- No persistence (refetched on each login / round transition)
+
+**seed-store** (`frontend/src/shared/lib/stores/seed-store.ts`):
+- State: `seedHash: string`, `seedHistory: RevealedSeed[]`
+- Actions: `setSeedHash()`, `revealSeed()` (calls provably-fair API)
+- Persistence: sessionStorage via `zustand/middleware/persist` (key: `igaming-seed-history`)
+
 ### Auth Layer
 
-**AuthContext** (`frontend/src/contexts/AuthContext.tsx`): Manages login state, localStorage persistence, and dev fallback.
-- `login(email, password)`: Calls `keycloakLogin()` → on success stores `{ id (UUID sub), email, token }` in `localStorage`
-- On network error in dev mode: falls back to static `DEV_USER_ID` UUID (`00000000-0000-0000-0000-000000000001`) — no JWT, no server dependency
-- On 401: throws to form for error display
-- Hydrates from `localStorage` on mount; `isLoading=true` until hydration completes (prevents login flash on refresh)
-- Wallet creation via `ensureWalletCreated()`: uses direct `fetch` (not `apiFetch`) with explicit `X-User-Id` header only — wallet is keyed by userId alone (no demo session). Called before `setUser()` to avoid race between socket connect and wallet existence.
-- Dev fallback also creates wallet before `setUser()`
+**Login Flow** (`frontend/src/features/auth-by-password/ui/LoginForm.tsx`):
+- Calls `useAuthStore().login(email, password)`
+- `login()` calls `keycloakLogin()` → on success stores `{ id (UUID sub), email, token }` in localStorage via Zustand persist middleware
+- No manual localStorage marshaling — Zustand persist handles serialize/deserialize
 
-**keycloakLogin** (`frontend/src/lib/auth.ts`): POSTs to `${config.apiUrl}/auth/realms/crash-game/protocol/openid-connect/token` (via Kong) with `grant_type=password`, decodes JWT body (base64), returns `{ userId (sub), email, token }`.
+**keycloakLogin** (`frontend/src/shared/api/auth.ts`): POSTs to `${config.apiUrl}/auth/realms/crash-game/protocol/openid-connect/token` (via Kong) with `grant_type=password`, decodes JWT body (base64), returns `{ userId (sub), email, token }`.
 
-**apiFetch** (`frontend/src/lib/api.ts`): Wraps `fetch()` with env-aware headers:
-- Reads `X-User-Id` and `Authorization: Bearer <token>` from localStorage (always sends both when auth data exists)
+**apiFetch** (`frontend/src/shared/api/api.ts`): Wraps `fetch()` with env-aware headers:
+- Reads `X-User-Id` and `Authorization: Bearer <token>` from auth-store's persisted localStorage
 - Dev Kong (`kong.dev.yml`): passes through `X-User-Id` without JWT validation
 - Prod Kong (`kong.prod.yml`): validates JWT, strips client-provided identity headers, injects trusted `X-User-Id` from `sub` claim
 
 ### Canvas Crash Graph
 
-**GameCanvas** (`frontend/src/components/game/GameCanvas.tsx`, 367 lines): HTML5 Canvas with `requestAnimationFrame` loop.
+**GameCanvas** (`frontend/src/widgets/game-canvas/ui/GameCanvas.tsx`, 367 lines): HTML5 Canvas with `requestAnimationFrame` loop.
 
 **Rendering Pipeline:**
 - `computePoints(multiplier, crashPoint, w, h)`: Generates up to 150 points with hockey-stick exponential curve. `x` is linear in progress (`p * w * 0.85`). Multiplier grows with a `p ** 2.2` bias (flat→steep). `y = h - normalized(curveM) * h * 0.85` where `normalized(curveM) = (curveM - 1) / (crashPoint - 1)`.
 - `drawLine(ctx, points, color)`: Draws the multiplier curve with `shadowBlur: 10` and `shadowColor` matching stroke color for the neon glow effect.
-- **Smooth animation**: `useCanvasRenderer` receives `runningStartTime` prop. In the rAF loop, when `roundState === 'running'` and `runningStartTime` is set, the multiplier is computed from elapsed time (`1.005 ** (elapsed / 100)`) rather than reading `currentMultiplierRef.current`. This decouples the canvas from React state updates (100ms `setInterval`) and produces smooth 60fps animation.
+- **Smooth animation**: `useCanvasRenderer` (`frontend/src/widgets/game-canvas/model/useCanvasRenderer.ts`) receives `runningStartTime` prop. In the rAF loop, when `roundState === 'running'` and `runningStartTime` is set, the multiplier is computed from elapsed time (`1.005 ** (elapsed / 100)`) rather than reading `currentMultiplierRef.current`. This decouples the canvas from React state updates (100ms `setInterval`) and produces smooth 60fps animation.
 - `drawRocket(ctx, tip, angle, color)`: 12-vertex vector shape drawn at the curve tip. Rotated via `ctx.rotate(angle + Math.PI/2)` where `angle = Math.atan2(dy, dx)` of the last two path points (tangent). Glow via `shadowBlur: 8`.
 - `drawExplosion(ctx, particles, crashTime, now)`: Expanding white circle (800ms, `Math.min(elapsed/800, 1) * 40` px radius) + 8 smoke particles (600ms, radial with random velocity). Uses `globalCompositeOperation = 'screen'` for additive blending.
 
 **Color Transition:** On crash, green (`#00ff88`) transitions to red (`#ff4444`) over 600ms via per-frame `lerpRGB`.
 
 **Dual-Mode Multiplier:**
-- Connected to server: reads `currentMultiplier` from `SocketContext` — no local timer
+- Connected to server: reads `currentMultiplier` from game-store — no local timer
 - Disconnected: internal `setInterval` at 100ms increments `multiplier * (1 + 0.005)` — allows dev without backend
 - `fallbackMultiplier` (React state) updated by timer; actual render uses `currentMultiplier ?? fallbackMultiplier`
 
@@ -932,46 +974,53 @@ App
 
 **Grid Background:** CSS `repeating-linear-gradient` (0°/90°, 60px pitch, 2.5% opacity lines) on a wrapper `div` behind the canvas.
 
-### Socket Context
+### Socket Connection Hook
 
-**SocketContext** (`frontend/src/contexts/SocketContext.tsx`, 332 lines): Manages socket.io connection and exposes round state to all game components.
+**useSocketConnection** (`frontend/src/shared/lib/hooks/useSocketConnection.ts`, 177 lines): Plain hook (no provider) that manages socket.io connection and dispatches events to Zustand stores.
 
 **Connection:** `io(config.isDev ? undefined : config.apiUrl, { transports: ['websocket', 'polling'] })`. In dev, empty URL → same-origin via Vite proxy → Kong. In prod, direct to `config.apiUrl` (Render URL or Kong).
 
-**Exposed Values:**
-- `bets: LiveBet[]` — live bet feed (id, user, amount, outcome)
-- `playingCount: number` — count of pending bets
-- `roundState: 'betting' | 'running' | 'crashed'` — current round phase
-- `roundNumber: number` — auto-incrementing counter
-- `currentMultiplier: number` — latest server multiplier
-- `seedHash: string` — current provably fair server seed hash
-- `seedHistory: RevealedSeed[]` — revealed seed entries (persisted to sessionStorage)
-- `revealSeed: () => Promise<void>` — reveal and rotate server seed
-- `balance: number | null` — user's wallet balance (shared source of truth for TopBar + RightPanel)
-- `refreshBalance: (userId: string) => Promise<void>` — refetch balance from wallets API
-- `connected: boolean` — socket connection status
-- `crashHistory: CrashRound[]` — list of rounds watched during this session (from `round:crashed` WS events)
-- `hasBet: boolean` — whether the current user has a pending bet
+**How it works:**
+- Called once inside `GamePage` component in a `useEffect`
+- On mount, creates socket connection with event listeners
+- Each listener calls the appropriate Zustand store action:
+  - `round:state-changed` → `useGameStore.getState().setRoundState()`
+  - `round:multiplier-updated` → `useGameStore.getState().updateMultiplier()`
+  - `round:bet-placed` → `useGameStore.getState().addBet()`
+  - `round:bet-cashed-out` → `useGameStore.getState().updateBet()`
+  - `round:crashed` → `useGameStore.getState().setCrashed()`
+- On unmount, disconnects socket
 
-**Socket Events Listened:**
-- `round:state-changed` — updates `roundState`, on `betting` increments round counter + resets multiplier, refreshes balance
-- `round:multiplier-updated` — updates `currentMultiplier`
-- `round:bet-placed` — prepends new bet to list
-- `round:bet-cashed-out` — updates bet outcome to `cashed` with multiplier
-- `round:crashed` — sets `roundState` to `crashed`, freezes multiplier at crash point, appends to crashHistory with user's bet outcome type
+**Consumed by widgets via store selectors:**
+- `LiveBets` reads `useGameStore(s => s.bets)`
+- `CrashHistoryPills` reads `useGameStore(s => s.crashHistory)`
+- `GameCanvas` reads `useGameStore(s => s.currentMultiplier)` and `useGameStore(s => s.roundState)`
+- `RightPanel` reads game-store state and writes via bet action hooks
+- `TopBar` reads `useBalanceStore(s => s.balance)`
 
-**Mock Bets:** 10 simulated players per round generated at `betting` phase. Each mock bet has a pre-determined `cashOutAt` multiplier set at creation: 35% conservative (1.01–1.2x), 20% moderate (1.21–2.0x), 15% aggressive (2.01–5.0x), 30% let-it-ride (null → loses on crash). During `betting` phase, mock bets are revealed in staggered batches (1-2 every 600ms). During `running` phase, an 800ms interval checks `currentMultiplier >= cashOutAt`. On crash, remaining pending mock bets become `lost`.
+**Balance fetching** (`frontend/src/shared/lib/hooks/useBalance.ts`):
+- Uses `@tanstack/react-query` with `useQuery` for wallet balance
+- Config: staleTime 15s, refetchOnWindowFocus enabled
+- Writes result to `balance-store` via `useBalanceStore.getState().setBalance()`
+- Refetched automatically on round state change (BETTING phase start)
+
+**Mock Bets** (`frontend/src/features/mock-bets/model/useMockBets.ts`):
+- 10 simulated players per round generated at `betting` phase
+- Each mock bet has a pre-determined `cashOutAt` multiplier: 35% conservative (1.01–1.2x), 20% moderate (1.21–2.0x), 15% aggressive (2.01–5.0x), 30% let-it-ride (null → loses on crash)
+- During `betting` phase: revealed in staggered batches (1-2 every 600ms)
+- During `running` phase: 800ms interval checks `currentMultiplier >= cashOutAt`
+- On crash: remaining pending mock bets become `lost`
 
 ### Dual-Mode GamePage
 
-**GamePage** (`frontend/src/components/game/GamePage.tsx`, 49 lines): Routes between server-connected and disconnected modes.
-- When `connected`: reads state from `SocketContext`, passes `currentMultiplier` to canvas, disables DEV button
+**GamePage** (`frontend/src/pages/game/ui/GamePage.tsx`, 49 lines): Routes between server-connected and disconnected modes.
+- When `connected`: reads state from game-store, passes `currentMultiplier` to canvas, disables DEV button
 - When disconnected: uses local React state (`localState`, `localRound`), passes `undefined` currentMultiplier to canvas (triggers fallback timer), shows DEV cycle button in RightPanel
 - Layout: `TopBar` (full width) → `flex flex-col md:flex-row` of `LiveBets | GameCanvas | RightPanel`. On mobile, LiveBets hidden (`hidden md:flex`), GameCanvas on top, RightPanel below at full width with `border-t md:border-l`.
 
 ### Tailwind 4 Theme
 
-Defined in `frontend/src/index.css` using `@theme` directive:
+Defined in `frontend/src/app/styles/index.css` using `@theme` directive:
 
 ```css
 --color-cyber-green: #00ff7f;
@@ -985,8 +1034,8 @@ Defined in `frontend/src/index.css` using `@theme` directive:
 
 ### Primitives
 
-- **Button** (`frontend/src/components/primitives/Button.tsx`): Uses `tailwind-variants` with `variant` (primary/ghost), `size` (md/sm), and `rounded` variants
-- **Input** (`frontend/src/components/primitives/Input.tsx`): Styled input with `focus:border-cyber-green focus:ring-1` focus state
+- **Button** (`frontend/src/shared/ui/Button.tsx`): Uses `tailwind-variants` with `variant` (primary/ghost), `size` (md/sm), and `rounded` variants
+- **Input** (`frontend/src/shared/ui/Input.tsx`): Styled input with `focus:border-cyber-green focus:ring-1` focus state
 
 ## Critical Context for Implementation
 
@@ -1069,10 +1118,11 @@ If a Round is stuck or has unexpected behavior:
 | Add HTTP endpoint | `services/*/src/presentation/controllers/` |
 | Add use case | `services/*/src/application/use-cases/` |
 | Modify Money precision | `services/wallets/src/domain/money.value-object.ts` |
-| Modify canvas render | `frontend/src/components/game/GameCanvas.tsx` |
-| Add socket event handler | `frontend/src/contexts/SocketContext.tsx` |
-| Add auth login flow | `frontend/src/contexts/AuthContext.tsx` |
-| Add API call from frontend | `frontend/src/lib/api.ts` |
+| Modify canvas render | `frontend/src/widgets/game-canvas/ui/GameCanvas.tsx` |
+| Add socket event handler | `frontend/src/shared/lib/hooks/useSocketConnection.ts` |
+| Add auth login flow | `frontend/src/shared/lib/stores/auth-store.ts` |
+| Add API call from frontend | `frontend/src/shared/api/api.ts` |
+| Add/update Zustand store | `frontend/src/shared/lib/stores/*.ts` |
 
 ## Git Workflow
 
@@ -1089,30 +1139,6 @@ If a Round is stuck or has unexpected behavior:
 - **Database queries**: Use indexes on userId, roundId for wallet/bet lookups
 - **WebSocket broadcasts**: Filter multiplier updates to only RUNNING rounds
 
-## Next Steps for Frontend Integration
-
-1. **Connect frontend to backend APIs**
-   - Use Kong gateway at `http://localhost:8000` (routes `/games/*` → 4001, `/wallets/*` → 4002)
-   - WebSocket connects through Kong via Vite proxy (`/socket.io` → `localhost:8000` → games:4001)
-   - Auth: JWT from Keycloak → Kong validates + injects `X-User-Id`
-   - For dev without Keycloak: pass `X-User-Id` header directly
-
-2. **Subscribe to WebSocket events**
-   - `round:multiplier-updated`: Update multiplier display in RUNNING phase
-   - `round:state-changed`: Handle BETTING → RUNNING → CRASHED transitions
-   - `round:bet-placed` / `round:bet-cashed-out`: Update bet states
-
-3. **Provably fair client-side verification**
-   - After round crashes, fetch `GET /games/rounds/:roundId/verify`
-   - Or use revealed server seed from `POST /games/provably-fair/reveal` + stored `clientSeed`/`nonce` to verify HMAC locally
-
-4. **E2E Testing**
-   - Ensure Docker services running (`bun docker:up`)
-   - Run `cd services/games && bun test tests/e2e`
-   - Verify full place-bet → cash-out → wallet-credit flow
-
----
-
 **Status**: All items above are fully implemented ✅:
 - ✅ Game canvas with exponential curve, rocket, explosion animation
 - ✅ Socket.io WebSocket integration with dual-mode fallback (connected/disconnected)
@@ -1123,18 +1149,21 @@ If a Round is stuck or has unexpected behavior:
 - ✅ Tailwind 4 custom theme (5 colors, 2 fonts)
 - ✅ Primitives (Button, Input via tailwind-variants)
 - ✅ Refactored RightPanel (115 lines, 5 extracted sub-components, useBet hook, 7 shared lib modules)
+- ✅ Zustand stores replacing React Contexts (auth-store, game-store, balance-store, seed-store)
+- ✅ Feature-Sliced Design layout (app, pages, widgets, features, entities, shared)
+- ✅ TanStack React Query for wallet balance (staleTime 15s, refetchOnWindowFocus)
 
 ---
 
-**Last Updated**: 2026-07-01  
-**Domain Layer Status**: ✅ Complete (1,247 lines, 7 files)  
-**Application Layer Status**: ✅ Wallets Complete (376 lines, 9 files) | ✅ Games Complete (824 lines, 13 files)  
-**Infrastructure Layer Status**: ✅ Complete (841 lines, 9 files)  
+**Last Updated**: 2026-07-26  
+**Domain Layer Status**: ✅ Complete (787 lines, 8 files)  
+**Application Layer Status**: ✅ Complete (1,062 lines)  
+**Infrastructure Layer Status**: ✅ Complete (1,195 lines)  
 **Presentation Layer Status**: ✅ Complete (Games: 11 endpoints, Wallets: 5 endpoints)  
 **RabbitMQ Integration**: ✅ Complete (Games → Wallets async communication)  
 **Docker Environment**: ✅ Operational (PostgreSQL, RabbitMQ, Keycloak, Kong)  
-**Testing Status**: ✅ Complete (140 tests: 106 unit + 34 E2E)  
-**Frontend**: ✅ Complete (game canvas, socket context, auth layer, UI components)  
+**Testing Status**: ✅ Complete (127 tests: 103 unit + 24 E2E)  
+**Frontend**: ✅ Complete (game canvas, Zustand stores, FSD architecture, auth layer, UI components)  
 **Repository**: https://github.com/guilhermehfr/igaming-crash-system
 
 ---

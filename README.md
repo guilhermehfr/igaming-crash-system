@@ -82,6 +82,8 @@ And use the credentials below to login:
 | [React 19](https://react.dev/) | UI framework |
 | [Vite](https://vite.dev/) | Build tool and dev server |
 | [Tailwind CSS v4](https://tailwindcss.com/) | Styling |
+| [Zustand](https://zustand-demo.pmnd.rs/) | Client state management |
+| [@tanstack/react-query](https://tanstack.com/query) | Server state & caching |
 | [Socket.io Client](https://socket.io/) | Real-time game state |
 | HTML5 Canvas | Multiplier curve and rocket animation |
 
@@ -193,7 +195,11 @@ WebSockets for round synchronization. Traffic routes through Kong (`/socket.io` 
 
 ## 🖥 Frontend
 
-React 19 application built with Vite 8 and Tailwind 4. API traffic routes to your backend via `VITE_API_URL` (defaults to Kong on port 8000; set to `http://localhost:4003` for demo mode). In development, Vite proxy handles same-origin forwarding (`/games/*`, `/wallets/*`, `/socket.io`) to Kong.
+React 19 application built with Vite 8, Tailwind 4, Zustand (client state), and TanStack Query (server cache). FSD (Feature-Sliced Design) directory structure. API traffic routes to your backend via `VITE_API_URL` (defaults to Kong on port 8000; set to `http://localhost:4003` for demo mode). In development, Vite proxy handles same-origin forwarding (`/games/*`, `/wallets/*`, `/socket.io`) to Kong.
+
+### State Management
+
+4 Zustand stores replace React Contexts: `auth-store` (user state, localStorage persistence), `game-store` (round state, multiplier, bets, crash history), `balance-store` (wallet balance), `seed-store` (provably fair seeds, sessionStorage persistence). TanStack Query fetches wallet balance with 15s staleTime and refetchOnWindowFocus.
 
 ### Crash Graph
 
@@ -201,11 +207,11 @@ HTML5 Canvas renders the exponential multiplier curve with `requestAnimationFram
 
 ### Auth
 
-Keycloak OIDC password grant (`grant_type=password`, realm `crash-game`, client `crash-game-client`). On successful login, the JWT is stored in localStorage and sent as `Authorization: Bearer <token>` (production) or `X-User-Id` (development). If Keycloak is unreachable in development, a static UUID fallback is used. Wallets and bets use the `sub` UUID from the JWT as the system identity; email/username is display-only.
+Keycloak OIDC password grant (`grant_type=password`, realm `crash-game`, client `crash-game-client`). On successful login, the JWT is stored in localStorage via Zustand persist middleware and sent as `Authorization: Bearer <token>` (production) or `X-User-Id` (development). If Keycloak is unreachable in development, a static UUID fallback is used. Wallets and bets use the `sub` UUID from the JWT as the system identity; email/username is display-only.
 
 ### Real-time
 
-Socket.io connects through Kong. The frontend subscribes to `round:state-changed`, `round:multiplier-updated`, `round:bet-placed`, `round:bet-cashed-out`, and `round:crashed` events. When connected, the canvas multiplier comes from the server; when disconnected, a local `setInterval` fallback at 100ms allows dev without backend.
+Socket.io connects through Kong. The `useSocketConnection()` hook dispatches events directly to Zustand stores. The frontend subscribes to `round:state-changed`, `round:multiplier-updated`, `round:bet-placed`, `round:bet-cashed-out`, and `round:crashed` events. When connected, the canvas multiplier comes from the server; when disconnected, a local `setInterval` fallback at 100ms allows dev without backend.
 
 ---
 
@@ -257,7 +263,7 @@ Health endpoints are accessed directly from service ports.
 
 ## 🧪 Testing
 
-- **140 tests total**: 106 unit + 34 E2E
+- **127 tests total**: 103 unit + 24 E2E
 - Bun native test framework
 - Domain layer thoroughly tested
 - Application layer use cases tested
@@ -288,22 +294,13 @@ Swagger UI available at:
 │   └── demo/              # Single-service demo (merged games+wallets, simple JWT)
 ├── frontend/
 │   └── src/
-│       ├── App.tsx              # Root with AuthProvider → LoginPage | GamePage
-│       ├── main.tsx             # Entry point
-│       ├── config.ts            # Env vars config (apiUrl, wsUrl, keycloakUrl)
-│       ├── index.css            # Tailwind 4 + custom theme (colors, fonts)
-│       ├── lib/
-│       │   ├── auth.ts          # keycloakLogin() — OIDC password grant
-│       │   └── api.ts           # apiFetch() — env-aware header injection
-│       ├── contexts/
-│       │   ├── AuthContext.tsx   # Keycloak login, dev fallback, localStorage
-│       │   └── SocketContext.tsx # Socket.io connection, round state, bets
-│       └── components/
-│           ├── auth/            # LoginForm, LoginPage
-│           ├── brand/           # BrandPanel (rocket logo)
-│           ├── game/            # GameCanvas, GamePage, RightPanel, TopBar,
-│           │                    # CrashHistoryPills, LiveBets
-│           └── primitives/      # Button, Input (tailwind-variants)
+│       ├── app/                 # Root: ErrorBoundary, QueryProvider, entrypoint, styles
+│       ├── entities/            # Business entities (wallet BalanceDisplay)
+│       ├── features/            # Feature modules (auth-by-password, place-bet, mock-bets)
+│       ├── pages/               # Route pages (game, login)
+│       ├── shared/              # Shared: API client, config, Zustand stores, UI primitives, hooks, canvas utils
+│       │   └── lib/stores/      # Zustand: auth-store, balance-store, game-store, seed-store
+│       └── widgets/             # Complex UI blocks (top-bar, game-canvas, live-bets, right-panel, crash-history)
 ├── docker/
 └── docker-compose.yml
 ```
@@ -360,6 +357,9 @@ bun docker:up:prod
 - Explicit state machine in Round aggregate for game logic
 - Frontend consumes the unified API through the gateway + stable WebSocket connection
 - Canvas-based crash graph renderer with requestAnimationFrame loop
+- Zustand stores for client state with selector-based re-render isolation
+- TanStack Query for wallet balance with stale-time caching
+- FSD (Feature-Sliced Design) directory structure
 - Env-aware auth headers: dev uses `X-User-Id`, prod uses JWT `Authorization`
 
 ---
