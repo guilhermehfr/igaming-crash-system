@@ -1,12 +1,13 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
-import { useAuth, useSocket } from '@/app/providers';
 import { formatCurrency } from '@/shared/lib/format';
+import { useAuthStore, useBalanceStore, useGameStore } from '@/shared/lib/stores';
 import { CrashHistoryPills } from '@/widgets/crash-history';
 
 export function TopBar() {
-  const { user } = useAuth();
-  const { balance, crashHistory } = useSocket();
+  const user = useAuthStore((s) => s.user);
+  const balance = useBalanceStore((s) => s.balance);
+  const crashHistory = useGameStore((s) => s.crashHistory);
   const [pillsOpen, setPillsOpen] = useState(false);
 
   return (

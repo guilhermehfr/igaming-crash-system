@@ -1,9 +1,10 @@
-import { useSocket } from '@/app/providers';
 import { formatCurrency } from '@/shared/lib/format';
 import { betOutcomeToColor, betOutcomeToDisplayText } from '@/shared/lib/round-state';
+import { useGameStore } from '@/shared/lib/stores';
 
 export function LiveBets() {
-  const { bets, playingCount } = useSocket();
+  const bets = useGameStore((s) => s.bets);
+  const playingCount = useGameStore((s) => s.playingCount);
 
   return (
     <section className="hidden w-[25rem] shrink-0 flex-col overflow-hidden border-r border-slate-800/60 px-6 pt-6 md:flex">

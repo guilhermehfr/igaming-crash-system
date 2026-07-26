@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
-import type { AuthUser } from '@/app/providers';
 import type { BetAction } from '@/features/place-bet/model/useBetState';
 import { apiFetch } from '@/shared/api/api';
 import { config } from '@/shared/config/config';
+import type { AuthUser } from '@/shared/lib/stores';
 
 export function useBetActions(
   dispatch: React.Dispatch<BetAction>,

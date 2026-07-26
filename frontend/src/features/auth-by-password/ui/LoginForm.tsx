@@ -1,6 +1,6 @@
 import { Rocket } from 'lucide-react';
 import { useState } from 'react';
-import { useAuth } from '@/app/providers';
+import { useAuthStore } from '@/shared/lib/stores';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
 
@@ -8,7 +8,7 @@ export function LoginForm() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login } = useAuth();
+  const login = useAuthStore((s) => s.login);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

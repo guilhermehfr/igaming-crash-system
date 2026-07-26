@@ -1,7 +1,7 @@
-import { useAuth, useSocket } from '@/app/providers';
 import { BalanceDisplay } from '@/entities/wallet';
 import { ActionButton, BetInput, BetMessages, PositionStatus, useBet } from '@/features/place-bet';
 import type { RoundState } from '@/shared/lib/socket-types';
+import { useAuthStore, useBalanceStore } from '@/shared/lib/stores';
 import { useRightPanel } from '@/widgets/right-panel/model/useRightPanel';
 
 type RightPanelProps = {
@@ -11,8 +11,8 @@ type RightPanelProps = {
 };
 
 export function RightPanel({ roundState, setRoundState, connected }: RightPanelProps) {
-  const { user } = useAuth();
-  const { balance } = useSocket();
+  const user = useAuthStore((s) => s.user);
+  const balance = useBalanceStore((s) => s.balance);
   const {
     betAmount,
     setBetAmount,

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAuth, useSocket } from '@/app/providers';
 import { useBetActions } from '@/features/place-bet/model/useBetActions';
 import { useBetState } from '@/features/place-bet/model/useBetState';
 import { BET, calculateWinnings } from '@/shared/lib/bet-utils';
 import { useBalance } from '@/shared/lib/hooks';
 import type { RoundState } from '@/shared/lib/socket-types';
+import { useAuthStore, useGameStore } from '@/shared/lib/stores';
 
 export function useBet(roundState: RoundState) {
-  const { user } = useAuth();
-  const { currentMultiplier } = useSocket();
+  const user = useAuthStore((s) => s.user);
+  const currentMultiplier = useGameStore((s) => s.currentMultiplier);
   const { balance: rawBalance, refreshBalance } = useBalance(user?.id);
   const balance = rawBalance ?? 0;
 

@@ -1,10 +1,12 @@
 import { ErrorBoundary } from '@/app/ErrorBoundary';
-import { AuthProvider, QueryProvider, useAuth } from '@/app/providers';
+import { QueryProvider } from '@/app/providers';
 import { GamePage } from '@/pages/game';
 import { LoginPage } from '@/pages/login';
+import { useAuthStore } from '@/shared/lib/stores';
 
 function AppContent() {
-  const { user, isLoading } = useAuth();
+  const user = useAuthStore((s) => s.user);
+  const isLoading = useAuthStore((s) => s.isLoading);
 
   if (isLoading) return null;
 
@@ -19,9 +21,7 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryProvider>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
+        <AppContent />
       </QueryProvider>
     </ErrorBoundary>
   );

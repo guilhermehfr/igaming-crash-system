@@ -1,20 +1,20 @@
-import { SocketProvider, useSocket } from '@/app/providers';
 import { useDisconnectedGame } from '@/pages/game/model/useDisconnectedGame';
+import { useSocketConnection } from '@/shared/lib/hooks/useSocketConnection';
+import { useGameStore, useSeedStore } from '@/shared/lib/stores';
 import { GameCanvas } from '@/widgets/game-canvas';
 import { LiveBets } from '@/widgets/live-bets';
 import { RightPanel } from '@/widgets/right-panel';
 import { TopBar } from '@/widgets/top-bar';
 
 function GamePageContent() {
-  const {
-    roundState,
-    roundNumber,
-    currentMultiplier,
-    connected,
-    seedHash,
-    seedHistory,
-    revealSeed,
-  } = useSocket();
+  useSocketConnection();
+  const roundState = useGameStore((s) => s.roundState);
+  const roundNumber = useGameStore((s) => s.roundNumber);
+  const currentMultiplier = useGameStore((s) => s.currentMultiplier);
+  const connected = useGameStore((s) => s.connected);
+  const seedHash = useSeedStore((s) => s.seedHash);
+  const seedHistory = useSeedStore((s) => s.seedHistory);
+  const revealSeed = useSeedStore((s) => s.revealSeed);
 
   const { localState, handleLocalState } = useDisconnectedGame();
 
@@ -45,9 +45,5 @@ function GamePageContent() {
 }
 
 export function GamePage() {
-  return (
-    <SocketProvider>
-      <GamePageContent />
-    </SocketProvider>
-  );
+  return <GamePageContent />;
 }
