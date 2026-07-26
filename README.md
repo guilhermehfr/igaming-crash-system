@@ -13,6 +13,8 @@ A real-time multiplayer crash game system built with Domain-Driven Design and He
 
 🌐 _[Leia em Português](README-pt-br.md)_
 
+<img width="700" height="400" alt="image" src="https://github.com/user-attachments/assets/c6ffcaaa-47b4-4e61-a2a9-7906a3d0ed70" />
+
 [Live App](https://igaming-crash.vercel.app) · [API](https://crash-demo-rfb8.onrender.com) · [Report Bug](https://github.com/guilhermehfr/igaming-crash-system/issues)
 
 ---
