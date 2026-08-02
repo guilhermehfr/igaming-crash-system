@@ -11,9 +11,9 @@
     "docker:up:prod": "docker compose -f docker-compose.yml -f docker-compose.prod.yml up",
     "docker:down": "docker compose down",
     "docker:reset": "docker compose down -v --rmi all --remove-orphans",
-    "demo:up": "docker compose -f docker-compose.demo.yml up -d",
-    "demo:down": "docker compose -f docker-compose.demo.yml down",
-    "demo:reset": "docker compose -f docker-compose.demo.yml down -v --rmi all --remove-orphans"
+    "demo:up": "docker compose up -d demo",
+    "demo:down": "docker compose stop demo postgres_demo && docker compose rm -f demo postgres_demo",
+    "demo:reset": "docker compose rm -fv demo postgres_demo && docker rmi crash-game-demo || true"
   },
   "devDependencies": {
     "bun-types": "latest"

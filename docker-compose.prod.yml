@@ -4,7 +4,15 @@ services:
       KONG_DECLARATIVE_CONFIG: /kong/kong.prod.yml
 
   games:
-    ports: []
+    command: ["bun", "run", "src/main.ts"]
+    volumes: !reset [] 
+    ports: !reset [] 
 
   wallets:
-    ports: []
+    command: ["bun", "run", "src/main.ts"]
+    volumes: !reset [] 
+    ports: !reset [] 
+
+  frontend:
+    command: ["bun", "run", "preview", "--", "--port", "80", "--host"]
+    volumes: !reset [] 

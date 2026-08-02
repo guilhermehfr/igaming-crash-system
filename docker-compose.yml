@@ -74,31 +74,26 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      keycloak:
-        condition: service_healthy
 
   games:
     build:
       context: .
       dockerfile: ./services/games/Dockerfile
+    command: ["bun", "run", "dev"]
     ports:
       - "4001:4001"
+    volumes:
+      - ./services/games/src:/app/services/games/src
+      - ./packages:/app/packages
     env_file:
       - ./services/games/.env
     environment:
-      - DB_HOST=postgres
-      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+      DB_HOST: postgres
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      kong:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:4001/games/health || exit 1"]
@@ -111,19 +106,21 @@ services:
     build:
       context: .
       dockerfile: ./services/wallets/Dockerfile
+    command: ["bun", "run", "dev"]
     ports:
       - "4002:4002"
+    volumes:
+      - ./services/wallets/src:/app/services/wallets/src
+      - ./packages:/app/packages
     env_file:
       - ./services/wallets/.env
     environment:
-      - DB_HOST=postgres
-      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+      DB_HOST: postgres
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      kong:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:4002/wallets/health || exit 1"]
@@ -136,12 +133,59 @@ services:
     build:
       context: .
       dockerfile: ./frontend/Dockerfile
+    command: ["bun", "run", "dev", "--host", "0.0.0.0", "--port", "80"]
     ports:
       - "5173:80"
+    environment:
+      VITE_PROXY_TARGET: http://kong:8000
+    volumes:
+      - ./frontend/src:/app/frontend/src
+      - ./frontend/index.html:/app/frontend/index.html
+      - ./frontend/vite.config.ts:/app/frontend/vite.config.ts
+      - ./frontend/tsconfig.json:/app/frontend/tsconfig.json
     depends_on:
       kong:
         condition: service_healthy
 
+  postgres_demo:
+    image: postgres:18.3-alpine
+    profiles: ["demo"]
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: crash_demo
+    volumes:
+      - postgres_demo_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d crash_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  demo:
+    build:
+      context: .
+      dockerfile: services/demo/Dockerfile
+    profiles: ["demo"]
+    ports:
+      - "4003:4001"
+    environment:
+      DATABASE_URL: postgresql://admin:admin@postgres_demo:5432/crash_demo?sslmode=disable
+      JWT_SECRET: demo-local-secret
+      NODE_ENV: development
+    depends_on:
+      postgres_demo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4001/games/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
 volumes:
   postgres_data:
   rabbitmq_data:
+  postgres_demo_data:
