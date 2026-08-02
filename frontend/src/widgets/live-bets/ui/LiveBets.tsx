@@ -5,6 +5,7 @@ import { useGameStore } from '@/shared/lib/stores';
 export function LiveBets() {
   const bets = useGameStore((s) => s.bets);
   const playingCount = useGameStore((s) => s.playingCount);
+  const myBetId = useGameStore((s) => s.myBetId);
 
   return (
     <section className="hidden w-[25rem] shrink-0 flex-col overflow-hidden border-r border-slate-800/60 px-6 pt-6 md:flex">
@@ -29,7 +30,11 @@ export function LiveBets() {
             key={bet.id}
             className={`flex items-center border-b border-slate-800/20 px-3 py-2 text-sm last:border-b-0 ${i % 2 === 0 ? 'bg-slate-800/20' : ''}`}
           >
-            <span className="flex-1 truncate text-slate-300">{bet.displayName}</span>
+            <span
+              className={`flex-1 truncate ${bet.id === myBetId ? 'text-neon-green' : 'text-slate-300'}`}
+            >
+              {bet.displayName}
+            </span>
             <span className="flex-1 font-medium tabular-nums text-white">
               {formatCurrency(bet.amount)}
             </span>

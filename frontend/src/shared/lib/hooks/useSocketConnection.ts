@@ -31,11 +31,7 @@ export function useSocketConnection() {
   const { balance, refreshBalance } = useBalance(user?.id);
   const { bets, clearMockTimer } = useMockBets(roundState, currentMultiplier);
 
-  const currentMultiplierRef = useRef(0);
-  currentMultiplierRef.current = currentMultiplier;
   const currentRoundIdRef = useRef<string | null>(null);
-  const betsRef = useRef<LiveBet[]>([]);
-  betsRef.current = bets;
   const userIdRef = useRef<string | null>(null);
   userIdRef.current = user?.id ?? null;
 
@@ -44,7 +40,7 @@ export function useSocketConnection() {
   }, [balance, setBalance]);
 
   useEffect(() => {
-    setBets(bets);
+    setBets((prev) => [...prev.filter((b) => !b.id.startsWith('mock-')), ...bets]);
   }, [bets, setBets]);
 
   useEffect(() => {
@@ -112,11 +108,12 @@ export function useSocketConnection() {
         bet: { id: string; userId: string; demoSessionId: string | null; amountInMainUnit: number };
       }) => {
         if (data.roundId !== currentRoundIdRef.current) return;
-        if (data.bet.userId === userIdRef.current) setHasBetAction();
+        const isOwnBet = data.bet.id === useGameStore.getState().myBetId;
+        if (isOwnBet) setHasBetAction();
         const newBet: LiveBet = {
           id: data.bet.id,
           user: data.bet.userId,
-          displayName: toDisplayName(data.bet.userId, data.bet.demoSessionId),
+          displayName: isOwnBet ? 'demo' : toDisplayName(data.bet.userId, data.bet.demoSessionId),
           amount: data.bet.amountInMainUnit,
           outcome: { type: 'pending' },
         };
@@ -143,7 +140,9 @@ export function useSocketConnection() {
     socket.on('round:crashed', (data: { roundId: string; crashPoint: number }) => {
       if (data.roundId !== currentRoundIdRef.current) return;
 
-      const userBet = betsRef.current.find((b) => b.user === userIdRef.current);
+      const userBet = useGameStore
+        .getState()
+        .bets.find((b) => b.id === useGameStore.getState().myBetId);
       const type: CrashRound['type'] = !userBet
         ? 'none'
         : userBet.outcome.type === 'cashed'

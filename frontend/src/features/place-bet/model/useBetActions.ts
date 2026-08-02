@@ -3,6 +3,7 @@ import type { BetAction } from '@/features/place-bet/model/useBetState';
 import { apiFetch } from '@/shared/api/api';
 import { config } from '@/shared/config/config';
 import type { AuthUser } from '@/shared/lib/stores';
+import { useGameStore } from '@/shared/lib/stores';
 
 export function useBetActions(
   dispatch: React.Dispatch<BetAction>,
@@ -33,6 +34,7 @@ export function useBetActions(
       }
       const data = await res.json();
       dispatch({ type: 'PLACE', betId: data.id, amount: data.amountInMainUnit });
+      useGameStore.getState().setMyBetId(data.id);
       await refreshBalance(user.id);
     } catch (err) {
       if (config.isDev) console.error('Place bet error:', err);

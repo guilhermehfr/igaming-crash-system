@@ -9,6 +9,7 @@ type GameState = {
   roundNumber: number;
   crashHistory: CrashRound[];
   hasBet: boolean;
+  myBetId: string | null;
   bets: LiveBet[];
   playingCount: number;
 };
@@ -23,6 +24,7 @@ type GameActions = {
   setRoundState: (state: RoundState) => void;
   updateMultiplier: (multiplier: number) => void;
   setHasBet: () => void;
+  setMyBetId: (id: string | null) => void;
   setCrashed: (crashPoint: number, userBetType: CrashRound['type']) => void;
   incrementRound: () => void;
   setBets: (betsOrUpdater: LiveBet[] | ((prev: LiveBet[]) => LiveBet[])) => void;
@@ -39,6 +41,7 @@ const INITIAL: GameState = {
   roundNumber: 0,
   crashHistory: [],
   hasBet: false,
+  myBetId: null,
   bets: [],
   playingCount: 0,
 };
@@ -52,10 +55,21 @@ export const useGameStore = create<GameState & GameActions>((set) => ({
   clearError: () => set({ syncError: null }),
   initRound: (state, multiplier) => set({ roundState: state, currentMultiplier: multiplier }),
   startBetting: () =>
-    set({ roundState: 'betting', hasBet: false, syncError: null, currentMultiplier: 0 }),
+    set({
+      roundState: 'betting',
+      hasBet: false,
+      syncError: null,
+      currentMultiplier: 0,
+      myBetId: null,
+    }),
   setRoundState: (state) => set({ roundState: state }),
   updateMultiplier: (multiplier) => set({ currentMultiplier: multiplier }),
   setHasBet: () => set({ hasBet: true }),
+  setMyBetId: (id) =>
+    set((s) => ({
+      myBetId: id,
+      bets: id ? s.bets.map((b) => (b.id === id ? { ...b, displayName: 'demo' } : b)) : s.bets,
+    })),
   setCrashed: (crashPoint, userBetType) =>
     set((s) => ({
       roundState: 'crashed',

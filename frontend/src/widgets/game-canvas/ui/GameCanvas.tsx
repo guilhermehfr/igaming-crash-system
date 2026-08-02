@@ -63,7 +63,7 @@ export function GameCanvas({
         )}
       </div>
 
-      <div className="absolute inset-0 z-10 flex items-center justify-center">
+      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
         <span
           className={`font-heading font-bold tabular-nums tracking-tight mt-16 md:mt-0 ${roundStateToTextColor(roundState)}`}
           style={{

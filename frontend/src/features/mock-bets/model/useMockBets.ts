@@ -13,6 +13,8 @@ export function useMockBets(roundState: RoundState, currentMultiplier: number) {
   const mockTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const staggerTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mockRevealedRef = useRef(0);
+  const currentMultiplierRef = useRef(currentMultiplier);
+  currentMultiplierRef.current = currentMultiplier;
 
   const clearMockTimer = useCallback(() => {
     if (mockTimerRef.current !== null) {
@@ -66,7 +68,7 @@ export function useMockBets(roundState: RoundState, currentMultiplier: number) {
         ]);
       }
       mockTimerRef.current = setInterval(() => {
-        mockBetsRef.current = cashOutRandomMocks(mockBetsRef.current, currentMultiplier);
+        mockBetsRef.current = cashOutRandomMocks(mockBetsRef.current, currentMultiplierRef.current);
         setBets((prev) => [
           ...mockBetsRef.current.map(mockToLiveBet),
           ...prev.filter((b) => !b.id.startsWith('mock-')),
@@ -82,7 +84,7 @@ export function useMockBets(roundState: RoundState, currentMultiplier: number) {
     }
 
     return clearMockTimer;
-  }, [clearMockTimer, currentMultiplier, roundState]);
+  }, [clearMockTimer, roundState]);
 
   return { bets, setBets, clearMockTimer };
 }
