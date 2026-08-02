@@ -304,7 +304,8 @@ Swagger UI available at:
 │       │   └── lib/stores/      # Zustand: auth-store, balance-store, game-store, seed-store
 │       └── widgets/             # Complex UI blocks (top-bar, game-canvas, live-bets, right-panel, crash-history)
 ├── docker/
-└── docker-compose.yml
+├── docker-compose.yml
+└── docker-compose.prod.yml
 ```
 
 ---

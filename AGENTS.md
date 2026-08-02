@@ -419,6 +419,16 @@ interface IWalletRepository {
 - **Solution**: Replaced both contexts with 4 Zustand stores (`auth-store`, `balance-store`, `game-store`, `seed-store`). `useSocketConnection()` became a plain hook that dispatches to stores via `getState()`. `useBalance()` uses `@tanstack/react-query` with 15s staleTime. Zustand persist middleware handles localStorage/sessionStorage serialization. Migrated to Feature-Sliced Design directory structure.
 - **Files**: `frontend/src/shared/lib/stores/*.ts`, `frontend/src/shared/lib/hooks/useSocketConnection.ts`, `frontend/src/shared/lib/hooks/useBalance.ts`, multiple consumers across all layers
 
+**8. Own-Bet Highlighting (myBetId)**
+- **Problem**: Own bets were identified by `userIdRef` matching — fragile across sessions, no visual distinction in the live feed.
+- **Solution**: Added `myBetId: string | null` to game-store (`setMyBetId`). `useBetActions` persists it on place-bet. `useSocketConnection` detects own bets via `myBetId` and labels them `demo`. `LiveBets` highlights the own bet `text-neon-green`. `GameCanvas` multiplier overlay made `pointer-events-none`.
+- **Files**: `frontend/src/shared/lib/stores/game-store.ts`, `frontend/src/features/place-bet/model/useBetActions.ts`, `frontend/src/shared/lib/hooks/useSocketConnection.ts`, `frontend/src/widgets/live-bets/ui/LiveBets.tsx`, `frontend/src/widgets/game-canvas/ui/GameCanvas.tsx`
+
+**9. Docker Compose Simplification (2026-08-02)**
+- **Problem**: Four root compose files (`docker-compose.yml`, `.override.yml`, `.prod.yml`, `.demo.yml`) with overlapping config, broken root `.env` COMPOSE_FILE prod switch (silently produced dev config, no JWT), Kong boot serialized behind Keycloak, demo image missing curl.
+- **Solution**: Collapsed to 2 files. Dev defaults inlined into base (`bun run dev` + bind mounts). Demo (`postgres_demo` + `demo`) folded into base under `profiles: ["demo"]` — started via `docker compose up -d demo`, isolated to its own containers/volume. `docker-compose.prod.yml` reverts commands and uses `volumes: !reset []` / `ports: !reset []`. Full boot parallelism: Kong (DB-less) has zero `depends_on`; games/wallets no longer depend on Kong; frontend still waits on Kong. Demo image switched to `oven/bun:1-alpine` + curl. Root `.env`, `.override.yml`, `.demo.yml` deleted.
+- **Files**: `docker-compose.yml`, `docker-compose.prod.yml`, `services/demo/Dockerfile`, `package.json`, deleted `docker-compose.override.yml`, `docker-compose.demo.yml`, root `.env`
+
 ## Technology Stack
 
 - **Runtime**: Bun 1.x (Alpine Docker image)
@@ -534,7 +544,7 @@ bun docker:up:prod
 bun docker:down
 
 # Clean up volumes & images
-bun docker:prune
+bun docker:reset
 
 # View logs
 docker compose logs -f games       # Games service logs
@@ -917,8 +927,8 @@ State management moved from React Contexts to 4 Zustand stores. No context provi
 - Wallet creation via `ensureWalletCreated()`: direct `fetch` with explicit `X-User-Id` header only — wallet keyed by userId alone. Called before `setUser()` to avoid race between socket connect and wallet existence.
 
 **game-store** (`frontend/src/shared/lib/stores/game-store.ts`):
-- State: `connected`, `roundState`, `currentMultiplier`, `syncError`, `roundNumber`, `crashHistory`, `hasBet`, `bets: LiveBet[]`, `playingCount`
-- Actions: `setConnected`, `setDisconnected`, `setError`, `initRound`, `startBetting`, `setRoundState`, `updateMultiplier`, `setHasBet`, `setCrashed`, `incrementRound`, `setBets`, `addBet`, `updateBet`, `reset`
+- State: `connected`, `roundState`, `currentMultiplier`, `syncError`, `roundNumber`, `crashHistory`, `hasBet`, `myBetId: string | null`, `bets: LiveBet[]`, `playingCount`
+- Actions: `setConnected`, `setDisconnected`, `setError`, `initRound`, `startBetting`, `setRoundState`, `updateMultiplier`, `setHasBet`, `setMyBetId`, `setCrashed`, `incrementRound`, `setBets`, `addBet`, `updateBet`, `reset`
 - No persistence (ephemeral game state)
 
 **balance-store** (`frontend/src/shared/lib/stores/balance-store.ts`):
@@ -986,13 +996,14 @@ State management moved from React Contexts to 4 Zustand stores. No context provi
 - Each listener calls the appropriate Zustand store action:
   - `round:state-changed` → `useGameStore.getState().setRoundState()`
   - `round:multiplier-updated` → `useGameStore.getState().updateMultiplier()`
-  - `round:bet-placed` → `useGameStore.getState().addBet()`
+  - `round:bet-placed` → `useGameStore.getState().addBet()` — own bet detected via `myBetId` (not `userIdRef`) and labeled `demo`
   - `round:bet-cashed-out` → `useGameStore.getState().updateBet()`
   - `round:crashed` → `useGameStore.getState().setCrashed()`
+- Round init `setBets` dedupes mock bets: `[...prev.filter((b) => !b.id.startsWith('mock-')), ...bets]`
 - On unmount, disconnects socket
 
 **Consumed by widgets via store selectors:**
-- `LiveBets` reads `useGameStore(s => s.bets)`
+- `LiveBets` reads `useGameStore(s => s.bets)` and `useGameStore(s => s.myBetId)` — own bet highlighted `text-neon-green`
 - `CrashHistoryPills` reads `useGameStore(s => s.crashHistory)`
 - `GameCanvas` reads `useGameStore(s => s.currentMultiplier)` and `useGameStore(s => s.roundState)`
 - `RightPanel` reads game-store state and writes via bet action hooks
